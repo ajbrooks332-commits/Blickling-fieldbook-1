@@ -6,7 +6,7 @@ import { requireAuth } from "../lib/auth";
 const router = Router();
 
 // GET /reports/summary
-router.get("/reports/summary", requireAuth, async (req, res) => {
+router.get("/summary", requireAuth, async (req, res) => {
   const { dateFrom, dateTo } = req.query as Record<string, string>;
   if (!dateFrom || !dateTo) {
     res.status(400).json({ error: "dateFrom and dateTo are required" });

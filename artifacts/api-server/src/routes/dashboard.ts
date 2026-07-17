@@ -6,7 +6,7 @@ import { requireAuth } from "../lib/auth";
 const router = Router();
 
 // GET /dashboard/summary
-router.get("/dashboard/summary", requireAuth, async (req, res) => {
+router.get("/summary", requireAuth, async (req, res) => {
   const now = new Date();
   const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
   const endOfWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
@@ -64,7 +64,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res) => {
 });
 
 // GET /dashboard/charts
-router.get("/dashboard/charts", requireAuth, async (req, res) => {
+router.get("/charts", requireAuth, async (req, res) => {
   const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
   const [byCategory, byStatus, actionsByAssignee, observationsOverTime] = await Promise.all([

@@ -6,14 +6,14 @@ import { requireAuth } from "../lib/auth";
 const router = Router();
 
 // GET /locations
-router.get("/locations", requireAuth, async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
   const locs = await db.select().from(namedLocationsTable)
     .orderBy(asc(namedLocationsTable.name));
   res.json(locs);
 });
 
 // POST /locations
-router.post("/locations", requireAuth, async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   const { name, description, latitude, longitude } = req.body;
   if (!name) {
     res.status(400).json({ error: "name is required" });
@@ -34,7 +34,7 @@ router.post("/locations", requireAuth, async (req, res) => {
 });
 
 // PATCH /locations/:id
-router.patch("/locations/:id", requireAuth, async (req, res) => {
+router.patch("/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { name, description, latitude, longitude, active } = req.body;
 

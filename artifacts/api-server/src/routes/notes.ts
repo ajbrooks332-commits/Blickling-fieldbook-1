@@ -6,7 +6,7 @@ import { requireAuth } from "../lib/auth";
 const router = Router();
 
 // POST /notes
-router.post("/notes", requireAuth, async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   const { body, observationId, actionId } = req.body;
   if (!body) {
     res.status(400).json({ error: "body is required" });

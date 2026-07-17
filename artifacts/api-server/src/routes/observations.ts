@@ -7,7 +7,7 @@ import { generateObservationRef } from "../lib/references";
 const router = Router();
 
 // GET /observations
-router.get("/observations", requireAuth, async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
   const { status, priority, categoryId, namedLocationId, safetyIssue, publicAccessAffected, search, dateFrom, dateTo, page = "1", limit = "20" } = req.query as Record<string, string>;
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.min(100, Math.max(1, Number(limit)));
@@ -95,7 +95,7 @@ router.get("/observations", requireAuth, async (req, res) => {
 });
 
 // POST /observations
-router.post("/observations", requireAuth, async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   const { title, categoryId, priority, observedAt, description, status, latitude, longitude, gpsAccuracyMetres, namedLocationId, safetyIssue, publicAccessAffected, machineryRequired, followUpRequired, createdOffline, offlineId } = req.body;
 
   if (!title || !categoryId || !priority || !observedAt) {
@@ -141,7 +141,7 @@ router.post("/observations", requireAuth, async (req, res) => {
 });
 
 // GET /observations/map
-router.get("/observations/map", requireAuth, async (req, res) => {
+router.get("/map", requireAuth, async (req, res) => {
   const { status, priority, categoryId, namedLocationId, safetyIssue } = req.query as Record<string, string>;
   const conditions = [sql`${observationsTable.latitude} IS NOT NULL`];
   if (status) conditions.push(eq(observationsTable.status, status as any));
@@ -175,7 +175,7 @@ router.get("/observations/map", requireAuth, async (req, res) => {
 });
 
 // GET /observations/:id
-router.get("/observations/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
 
   const [obs] = await db
@@ -276,7 +276,7 @@ router.get("/observations/:id", requireAuth, async (req, res) => {
 });
 
 // PATCH /observations/:id
-router.patch("/observations/:id", requireAuth, async (req, res) => {
+router.patch("/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { title, description, categoryId, priority, status, observedAt, latitude, longitude, namedLocationId, safetyIssue, publicAccessAffected, machineryRequired, followUpRequired } = req.body;
 
@@ -312,7 +312,7 @@ router.patch("/observations/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /observations/:id
-router.delete("/observations/:id", requireAuth, async (req, res) => {
+router.delete("/:id", requireAuth, async (req, res) => {
   if (req.session.userRole !== "administrator") {
     res.status(403).json({ error: "Insufficient permissions" });
     return;
@@ -323,7 +323,7 @@ router.delete("/observations/:id", requireAuth, async (req, res) => {
 });
 
 // PATCH /observations/:id/status
-router.patch("/observations/:id/status", requireAuth, async (req, res) => {
+router.patch("/:id/status", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { status, reason } = req.body;
   if (!status) {

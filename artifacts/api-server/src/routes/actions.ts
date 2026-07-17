@@ -63,7 +63,7 @@ const actionSelectFields = {
 };
 
 // GET /actions/my
-router.get("/actions/my", requireAuth, async (req, res) => {
+router.get("/my", requireAuth, async (req, res) => {
   const userId = req.session.userId!;
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
@@ -134,7 +134,7 @@ router.get("/actions/my", requireAuth, async (req, res) => {
 });
 
 // GET /actions
-router.get("/actions", requireAuth, async (req, res) => {
+router.get("/", requireAuth, async (req, res) => {
   const { status, priority, assignedUserId, observationId, overdue, search, page = "1", limit = "20" } = req.query as Record<string, string>;
   const pageNum = Math.max(1, Number(page));
   const limitNum = Math.min(100, Number(limit));
@@ -178,7 +178,7 @@ router.get("/actions", requireAuth, async (req, res) => {
 });
 
 // POST /actions
-router.post("/actions", requireAuth, async (req, res) => {
+router.post("/", requireAuth, async (req, res) => {
   const { title, description, observationId, assignedToUserId, priority, status, dueDate, estimatedMinutes, equipmentRequired, contractorRequired, notes } = req.body;
 
   if (!title || !priority || !status) {
@@ -234,7 +234,7 @@ router.post("/actions", requireAuth, async (req, res) => {
 });
 
 // GET /actions/:id
-router.get("/actions/:id", requireAuth, async (req, res) => {
+router.get("/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
 
   const [action] = await db
@@ -286,7 +286,7 @@ router.get("/actions/:id", requireAuth, async (req, res) => {
 });
 
 // PATCH /actions/:id
-router.patch("/actions/:id", requireAuth, async (req, res) => {
+router.patch("/:id", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { title, description, assignedToUserId, priority, status, dueDate, estimatedMinutes, equipmentRequired, contractorRequired, completionNote, waitingReason, cancellationReason } = req.body;
 
@@ -325,7 +325,7 @@ router.patch("/actions/:id", requireAuth, async (req, res) => {
 });
 
 // PATCH /actions/:id/status
-router.patch("/actions/:id/status", requireAuth, async (req, res) => {
+router.patch("/:id/status", requireAuth, async (req, res) => {
   const id = Number(req.params.id);
   const { status, completionNote, waitingReason, cancellationReason } = req.body;
 
