@@ -1,7 +1,7 @@
 import React, { useState } from "react"
 import { useListObservations } from "@workspace/api-client-react"
-import { Search, Filter, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, ShieldAlert } from "lucide-react"
-import { Link } from "wouter"
+import { Search, Filter, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, ShieldAlert, X } from "lucide-react"
+import { Link, useSearch } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 
 const C = {
@@ -72,9 +72,19 @@ const PriorityIcon = ({ p }: { p: string }) => {
 }
 
 export default function ObservationList() {
+  const searchStr = useSearch()
+  const urlParams = new URLSearchParams(searchStr)
+  const initialPriority = urlParams.get("priority") || ""
+
   const [search, setSearch] = useState("")
   const [searchFocused, setSearchFocused] = useState(false)
-  const { data: listData, isLoading } = useListObservations({ status: '', search })
+  const [priorityFilter, setPriorityFilter] = useState(initialPriority)
+
+  const { data: listData, isLoading } = useListObservations({
+    status: '',
+    search,
+    ...(priorityFilter ? { priority: priorityFilter } : {}),
+  })
 
   return (
     <div className="space-y-6">
@@ -83,6 +93,26 @@ export default function ObservationList() {
         <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Observations</h1>
         <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Field records across the estate</p>
       </div>
+
+      {/* Active filter chip */}
+      {priorityFilter && (
+        <div className="flex items-center gap-2">
+          <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Filtered by:</span>
+          <button
+            onClick={() => setPriorityFilter("")}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+            style={{
+              background: priorityConfig(priorityFilter).bg,
+              color: priorityConfig(priorityFilter).color,
+              border: `1px solid ${priorityConfig(priorityFilter).color}40`,
+              ...BODY,
+            }}
+          >
+            {priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)} priority
+            <X className="h-3 w-3" />
+          </button>
+        </div>
+      )}
 
       {/* Search + Filters */}
       <div className="flex gap-2">

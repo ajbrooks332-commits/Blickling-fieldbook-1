@@ -1,7 +1,7 @@
 import React from "react"
 import { useListActions } from "@workspace/api-client-react"
-import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText } from "lucide-react"
-import { Link } from "wouter"
+import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X } from "lucide-react"
+import { Link, useSearch } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 
 const C = {
@@ -77,9 +77,22 @@ const PriorityIcon = ({ p }: { p: string }) => {
 }
 
 export default function ActionList() {
+  const searchStr = useSearch()
+  const urlParams = new URLSearchParams(searchStr)
+  const initialOverdue = urlParams.get("overdue") === "true"
+  const initialPriority = urlParams.get("priority") || ""
+
   const [search, setSearch] = React.useState("")
   const [statusFilter, setStatusFilter] = React.useState("")
-  const { data: listData, isLoading } = useListActions({ status: statusFilter, search })
+  const [overdueOnly, setOverdueOnly] = React.useState(initialOverdue)
+  const [priorityFilter, setPriorityFilter] = React.useState(initialPriority)
+
+  const { data: listData, isLoading } = useListActions({
+    status: statusFilter,
+    search,
+    ...(overdueOnly ? { overdue: true } : {}),
+    ...(priorityFilter ? { priority: priorityFilter } : {}),
+  })
 
   const isOverdue = (dueDate: string | null | undefined) => {
     if (!dueDate) return false
@@ -93,6 +106,31 @@ export default function ActionList() {
         <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Actions</h1>
         <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Manage tasks and assignments across the estate</p>
       </div>
+
+      {/* Active filter chips */}
+      {(overdueOnly || priorityFilter) && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Filtered by:</span>
+          {overdueOnly && (
+            <button
+              onClick={() => setOverdueOnly(false)}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ background: C.urgentTint, color: C.urgent, border: `1px solid ${C.urgent}40`, ...BODY }}
+            >
+              Overdue only <X className="h-3 w-3" />
+            </button>
+          )}
+          {priorityFilter && (
+            <button
+              onClick={() => setPriorityFilter("")}
+              className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+              style={{ background: priorityConfig(priorityFilter).bg, color: priorityConfig(priorityFilter).color, border: `1px solid ${priorityConfig(priorityFilter).color}40`, ...BODY }}
+            >
+              {priorityFilter.charAt(0).toUpperCase() + priorityFilter.slice(1)} priority <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Search + filter bar */}
       <div className="flex gap-2">

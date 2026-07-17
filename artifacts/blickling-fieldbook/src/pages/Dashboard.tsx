@@ -1,9 +1,9 @@
 import React from "react"
 import { useGetDashboardSummary, useGetDashboardCharts } from "@workspace/api-client-react"
-import { Link } from "wouter"
+import { Link, useLocation } from "wouter"
 import {
   AlertTriangle, ArrowUp, Clock, Activity, ChevronRight,
-  TrendingUp, ShieldAlert, MapPin
+  TrendingUp, MapPin
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -61,14 +61,31 @@ function statusColor(s: string) {
 
 /* ─── Metric tile ─────────────────────────────────────────────────────────── */
 function MetricTile({
-  label, value, icon: Icon, color, tint,
+  label, value, icon: Icon, color, href,
 }: {
-  label: string; value: number; icon: React.ElementType; color: string; tint: string
+  label: string; value: number; icon: React.ElementType; color: string; href: string
 }) {
+  const [, setLocation] = useLocation()
   return (
-    <div
-      className="rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden"
-      style={{ background: C.surface, border: `1px solid ${C.border}`, borderLeft: `3px solid ${color}` }}
+    <button
+      onClick={() => setLocation(href)}
+      className="rounded-xl p-4 flex flex-col gap-2 relative overflow-hidden w-full text-left transition-all"
+      style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderLeft: `3px solid ${color}`,
+        cursor: "pointer",
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = "#1c2128"
+        el.style.transform = "translateY(-1px)"
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLElement
+        el.style.background = C.surface
+        el.style.transform = "translateY(0)"
+      }}
     >
       {/* Glow */}
       <div
@@ -81,8 +98,11 @@ function MetricTile({
         </span>
         <Icon className="h-3.5 w-3.5" style={{ color }} />
       </div>
-      <div className="text-3xl font-bold" style={{ ...HEAD, color }}>{value}</div>
-    </div>
+      <div className="flex items-end justify-between">
+        <div className="text-3xl font-bold" style={{ ...HEAD, color }}>{value}</div>
+        <ChevronRight className="h-3.5 w-3.5 mb-1" style={{ color: C.dim }} />
+      </div>
+    </button>
   )
 }
 
@@ -144,6 +164,7 @@ function ObsRow({ obs }: { obs: any }) {
 
 /* ─── Main component ──────────────────────────────────────────────────────── */
 export default function Dashboard() {
+  const [, setLocation] = useLocation()
   const { data: summary, isLoading: loadingSummary } = useGetDashboardSummary()
   const { data: charts, isLoading: loadingCharts } = useGetDashboardCharts()
 
@@ -208,30 +229,42 @@ export default function Dashboard() {
 
       {/* ── Secondary stats callouts ─────────────────────────────────────── */}
       <div className="grid grid-cols-2 gap-3">
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
-             style={{ background: C.emeraldTint, border: `1px solid rgba(16,185,129,0.2)` }}>
+        <button
+          onClick={() => setLocation("/actions/my")}
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl w-full text-left transition-all"
+          style={{ background: C.emeraldTint, border: `1px solid rgba(16,185,129,0.2)`, cursor: "pointer" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(16,185,129,0.14)" }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = C.emeraldTint }}
+        >
           <Activity className="h-4 w-4 shrink-0" style={{ color: C.emerald }} />
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-bold" style={{ ...HEAD, color: C.emerald }}>{summary.actionsDueThisWeek}</div>
             <div className="text-[11px]" style={{ ...BODY, color: C.muted }}>Due this week</div>
           </div>
-        </div>
-        <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl"
-             style={{ background: C.blueTint, border: `1px solid rgba(88,166,255,0.2)` }}>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: C.dim }} />
+        </button>
+        <button
+          onClick={() => setLocation("/observations")}
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl w-full text-left transition-all"
+          style={{ background: C.blueTint, border: `1px solid rgba(88,166,255,0.2)`, cursor: "pointer" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(88,166,255,0.16)" }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = C.blueTint }}
+        >
           <TrendingUp className="h-4 w-4 shrink-0" style={{ color: C.blue }} />
-          <div>
+          <div className="flex-1">
             <div className="text-sm font-bold" style={{ ...HEAD, color: C.blue }}>{summary.observationsLast30Days}</div>
             <div className="text-[11px]" style={{ ...BODY, color: C.muted }}>New last 30d</div>
           </div>
-        </div>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: C.dim }} />
+        </button>
       </div>
 
       {/* ── Metric tiles ─────────────────────────────────────────────────── */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <MetricTile label="Urgent Issues"   value={summary.urgentObservations} icon={AlertTriangle} color={C.urgent}  tint={C.urgentTint} />
-        <MetricTile label="High Priority"   value={summary.highObservations}   icon={ArrowUp}       color={C.high}    tint={C.highTint} />
-        <MetricTile label="Overdue Actions" value={summary.overdueActions}      icon={Clock}         color={C.urgent}  tint={C.urgentTint} />
-        <MetricTile label="Open Records"    value={summary.openObservations}    icon={Activity}      color={C.emerald} tint={C.emeraldTint} />
+        <MetricTile label="Urgent Issues"   value={summary.urgentObservations} icon={AlertTriangle} color={C.urgent}  href="/observations?priority=urgent" />
+        <MetricTile label="High Priority"   value={summary.highObservations}   icon={ArrowUp}       color={C.high}    href="/observations?priority=high" />
+        <MetricTile label="Overdue Actions" value={summary.overdueActions}      icon={Clock}         color={C.urgent}  href="/actions?overdue=true" />
+        <MetricTile label="Open Records"    value={summary.openObservations}    icon={Activity}      color={C.emerald} href="/observations" />
       </div>
 
       {/* ── Charts row ───────────────────────────────────────────────────── */}
