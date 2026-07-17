@@ -1036,3 +1036,147 @@ export const GetReportSummaryResponse = zod.object({
 })
 
 
+/**
+ * @summary Request a presigned URL for file upload
+ */
+export const RequestUploadUrlBody = zod.object({
+  "name": zod.string(),
+  "size": zod.number(),
+  "contentType": zod.string()
+})
+
+export const RequestUploadUrlResponse = zod.object({
+  "uploadURL": zod.string(),
+  "objectPath": zod.string(),
+  "metadata": zod.object({
+  "name": zod.string().optional(),
+  "size": zod.number().optional(),
+  "contentType": zod.string().optional()
+}).optional()
+})
+
+
+/**
+ * @summary List images for an observation
+ */
+export const ListObservationImagesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListObservationImagesResponseItem = zod.object({
+  "id": zod.number(),
+  "observationId": zod.number(),
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().nullish(),
+  "imageType": zod.enum(['observation', 'progress', 'completion']),
+  "uploadedByUserId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListObservationImagesResponse = zod.array(ListObservationImagesResponseItem)
+
+
+/**
+ * @summary Save image metadata after upload
+ */
+export const AddObservationImageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddObservationImageBody = zod.object({
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().optional(),
+  "imageType": zod.enum(['observation', 'progress', 'completion']).optional()
+})
+
+export const AddObservationImageResponse = zod.object({
+  "id": zod.number(),
+  "observationId": zod.number(),
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().nullish(),
+  "imageType": zod.enum(['observation', 'progress', 'completion']),
+  "uploadedByUserId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an observation image
+ */
+export const DeleteObservationImageParams = zod.object({
+  "id": zod.coerce.number(),
+  "imageId": zod.coerce.number()
+})
+
+export const DeleteObservationImageResponse = zod.void()
+
+
+/**
+ * @summary List images for an action
+ */
+export const ListActionImagesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ListActionImagesResponseItem = zod.object({
+  "id": zod.number(),
+  "actionId": zod.number(),
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().nullish(),
+  "uploadedByUserId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+export const ListActionImagesResponse = zod.array(ListActionImagesResponseItem)
+
+
+/**
+ * @summary Save action image metadata after upload
+ */
+export const AddActionImageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const AddActionImageBody = zod.object({
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().optional(),
+  "imageType": zod.enum(['observation', 'progress', 'completion']).optional()
+})
+
+export const AddActionImageResponse = zod.object({
+  "id": zod.number(),
+  "actionId": zod.number(),
+  "storageKey": zod.string(),
+  "originalFilename": zod.string(),
+  "mimeType": zod.string(),
+  "fileSize": zod.number(),
+  "caption": zod.string().nullish(),
+  "uploadedByUserId": zod.number().nullish(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * @summary Delete an action image
+ */
+export const DeleteActionImageParams = zod.object({
+  "id": zod.coerce.number(),
+  "imageId": zod.coerce.number()
+})
+
+export const DeleteActionImageResponse = zod.void()
+
+

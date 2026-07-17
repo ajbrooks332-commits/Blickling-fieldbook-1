@@ -687,6 +687,80 @@ export interface ReportSummary {
   byLocation?: ChartPoint[];
 }
 
+export interface UploadUrlRequest {
+  name: string;
+  size: number;
+  contentType: string;
+}
+
+export type UploadUrlResponseMetadata = {
+  name?: string;
+  size?: number;
+  contentType?: string;
+};
+
+export interface UploadUrlResponse {
+  uploadURL: string;
+  objectPath: string;
+  metadata?: UploadUrlResponseMetadata;
+}
+
+export type ImageInputImageType = typeof ImageInputImageType[keyof typeof ImageInputImageType];
+
+
+export const ImageInputImageType = {
+  observation: 'observation',
+  progress: 'progress',
+  completion: 'completion',
+} as const;
+
+export interface ImageInput {
+  storageKey: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  caption?: string;
+  imageType?: ImageInputImageType;
+}
+
+export type ObservationImageImageType = typeof ObservationImageImageType[keyof typeof ObservationImageImageType];
+
+
+export const ObservationImageImageType = {
+  observation: 'observation',
+  progress: 'progress',
+  completion: 'completion',
+} as const;
+
+export interface ObservationImage {
+  id: number;
+  observationId: number;
+  storageKey: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  /** @nullable */
+  caption?: string | null;
+  imageType: ObservationImageImageType;
+  /** @nullable */
+  uploadedByUserId?: number | null;
+  createdAt: string;
+}
+
+export interface ActionImage {
+  id: number;
+  actionId: number;
+  storageKey: string;
+  originalFilename: string;
+  mimeType: string;
+  fileSize: number;
+  /** @nullable */
+  caption?: string | null;
+  /** @nullable */
+  uploadedByUserId?: number | null;
+  createdAt: string;
+}
+
 export type ListObservationsParams = {
 status?: string;
 priority?: string;

@@ -15,7 +15,7 @@ export default function ActionNew() {
   const observationId = obsIdParam ? Number(obsIdParam) : undefined
 
   const { data: obs, isLoading: obsLoading } = useGetObservation(observationId || 0, {
-    query: { enabled: !!observationId }
+    query: { enabled: !!observationId, queryKey: ['observation', observationId] }
   })
 
   const createAction = useCreateAction()

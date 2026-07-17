@@ -6,3 +6,5 @@ export * from "./observations";
 export * from "./actions";
 export * from "./notes";
 export * from "./audit-events";
+export * from "./observation-images";
+export * from "./action-images";

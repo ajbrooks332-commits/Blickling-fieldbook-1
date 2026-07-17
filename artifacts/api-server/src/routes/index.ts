@@ -9,10 +9,13 @@ import actionsRouter from "./actions";
 import notesRouter from "./notes";
 import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
+import storageRouter from "./storage";
+import imagesRouter from "./images";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
+router.use(storageRouter);
 router.use("/auth", authRouter);
 router.use(usersRouter);
 router.use(categoriesRouter);
@@ -22,5 +25,6 @@ router.use("/actions", actionsRouter);
 router.use("/notes", notesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/reports", reportsRouter);
+router.use(imagesRouter);
 
 export default router;

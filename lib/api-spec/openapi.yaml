@@ -28,6 +28,8 @@ tags:
     description: Dashboard summary data
   - name: reports
     description: Management reports
+  - name: storage
+    description: File upload and object serving
 
 paths:
   /healthz:
@@ -700,6 +702,158 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ReportSummary"
+
+  # Storage
+  /storage/uploads/request-url:
+    post:
+      operationId: requestUploadUrl
+      tags: [storage]
+      summary: Request a presigned URL for file upload
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UploadUrlRequest"
+      responses:
+        "200":
+          description: Presigned upload URL
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/UploadUrlResponse"
+        "401":
+          description: Unauthorized
+
+  # Observation Images
+  /observations/{id}/images:
+    get:
+      operationId: listObservationImages
+      tags: [observations]
+      summary: List images for an observation
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of images
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ObservationImage"
+    post:
+      operationId: addObservationImage
+      tags: [observations]
+      summary: Save image metadata after upload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageInput"
+      responses:
+        "201":
+          description: Image record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ObservationImage"
+
+  /observations/{id}/images/{imageId}:
+    delete:
+      operationId: deleteObservationImage
+      tags: [observations]
+      summary: Delete an observation image
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  # Action Images
+  /actions/{id}/images:
+    get:
+      operationId: listActionImages
+      tags: [actions]
+      summary: List images for an action
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of images
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActionImage"
+    post:
+      operationId: addActionImage
+      tags: [actions]
+      summary: Save action image metadata after upload
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImageInput"
+      responses:
+        "201":
+          description: Image record created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActionImage"
+
+  /actions/{id}/images/{imageId}:
+    delete:
+      operationId: deleteActionImage
+      tags: [actions]
+      summary: Delete an action image
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: imageId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
 
 components:
   schemas:
@@ -1518,3 +1672,101 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ChartPoint"
+
+    # Storage
+    UploadUrlRequest:
+      type: object
+      required: [name, size, contentType]
+      properties:
+        name:
+          type: string
+        size:
+          type: integer
+        contentType:
+          type: string
+
+    UploadUrlResponse:
+      type: object
+      required: [uploadURL, objectPath]
+      properties:
+        uploadURL:
+          type: string
+        objectPath:
+          type: string
+        metadata:
+          type: object
+          properties:
+            name:
+              type: string
+            size:
+              type: integer
+            contentType:
+              type: string
+
+    # Images
+    ImageInput:
+      type: object
+      required: [storageKey, originalFilename, mimeType, fileSize]
+      properties:
+        storageKey:
+          type: string
+        originalFilename:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        caption:
+          type: string
+        imageType:
+          type: string
+          enum: [observation, progress, completion]
+
+    ObservationImage:
+      type: object
+      required: [id, observationId, storageKey, originalFilename, mimeType, fileSize, imageType, createdAt]
+      properties:
+        id:
+          type: integer
+        observationId:
+          type: integer
+        storageKey:
+          type: string
+        originalFilename:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        caption:
+          type: ["string", "null"]
+        imageType:
+          type: string
+          enum: [observation, progress, completion]
+        uploadedByUserId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+
+    ActionImage:
+      type: object
+      required: [id, actionId, storageKey, originalFilename, mimeType, fileSize, createdAt]
+      properties:
+        id:
+          type: integer
+        actionId:
+          type: integer
+        storageKey:
+          type: string
+        originalFilename:
+          type: string
+        mimeType:
+          type: string
+        fileSize:
+          type: integer
+        caption:
+          type: ["string", "null"]
+        uploadedByUserId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string

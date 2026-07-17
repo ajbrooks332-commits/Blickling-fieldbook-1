@@ -1,13 +1,23 @@
-import React, { useState } from "react"
+import React, { useState, useEffect } from "react"
 import { useGetObservation, useCreateAction, useUpdateObservationStatus, useCreateNote, getGetObservationQueryKey } from "@workspace/api-client-react"
 import { useParams, useLocation, Link } from "wouter"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, Edit, FileText, CheckCircle2, AlertCircle, Map, MessageSquare, ChevronRight } from "lucide-react"
+import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, Edit, FileText, CheckCircle2, AlertCircle, Map, MessageSquare, ChevronRight, Camera } from "lucide-react"
 import { formatShortDate, formatDate, getInitials } from "@/lib/utils"
 import { useQueryClient } from "@tanstack/react-query"
+import PhotoGallery from "@/components/PhotoGallery"
+import PhotoUpload from "@/components/PhotoUpload"
+
+interface ObservationImage {
+  id: number
+  storageKey: string
+  originalFilename: string
+  caption?: string | null
+  mimeType: string
+}
 
 export default function ObservationDetail() {
   const params = useParams<{ id: string }>()
@@ -21,8 +31,44 @@ export default function ObservationDetail() {
 
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteBody, setNoteBody] = useState("")
-  
   const [statusOpen, setStatusOpen] = useState(false)
+
+  const [images, setImages] = useState<ObservationImage[]>([])
+  const [imagesLoading, setImagesLoading] = useState(false)
+
+  const fetchImages = async () => {
+    if (!id) return
+    setImagesLoading(true)
+    try {
+      const res = await fetch(`/api/observations/${id}/images`)
+      if (res.ok) {
+        const data = await res.json()
+        setImages(Array.isArray(data) ? data : (data.images || []))
+      }
+    } catch {
+      // silently fail
+    } finally {
+      setImagesLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (id) fetchImages()
+  }, [id])
+
+  const handlePhotoUploaded = async (image: { storageKey: string; originalFilename: string; mimeType: string; fileSize: number }) => {
+    await fetch(`/api/observations/${id}/images`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...image, imageType: 'observation' })
+    })
+    fetchImages()
+  }
+
+  const handleDeleteImage = async (imageId: number) => {
+    await fetch(`/api/observations/${id}/images/${imageId}`, { method: 'DELETE' })
+    setImages(prev => prev.filter(img => img.id !== imageId))
+  }
 
   if (isLoading || !obs) {
     return <div className="p-12 flex justify-center"><div className="animate-pulse h-8 w-8 bg-primary rounded-full"></div></div>
@@ -146,6 +192,33 @@ export default function ObservationDetail() {
                 {obs.machineryRequired && <Badge variant="secondary">Machinery Req.</Badge>}
                 {obs.followUpRequired && <Badge variant="outline">Follow-up Req.</Badge>}
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Photographs section */}
+          <Card>
+            <CardHeader className="pb-3 border-b">
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Camera className="w-5 h-5" />
+                Photographs
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <PhotoUpload
+                onUploaded={handlePhotoUploaded}
+                label="Add Photo"
+              />
+              {imagesLoading ? (
+                <div className="flex justify-center py-4">
+                  <div className="animate-pulse h-6 w-6 bg-primary/40 rounded-full"></div>
+                </div>
+              ) : (
+                <PhotoGallery
+                  images={images}
+                  onDelete={handleDeleteImage}
+                  editable={true}
+                />
+              )}
             </CardContent>
           </Card>
 
