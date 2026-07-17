@@ -11,6 +11,7 @@ import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
 import storageRouter from "./storage";
 import imagesRouter from "./images";
+import resetRouter from "./reset";
 
 const router: IRouter = Router();
 
@@ -26,5 +27,6 @@ router.use("/notes", notesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/reports", reportsRouter);
 router.use(imagesRouter);
+router.use(resetRouter);
 
 export default router;
