@@ -1,0 +1,27 @@
+kind = "web"
+previewPath = "/"
+title = "Blickling Fieldbook"
+version = "1.0.0"
+id = "artifacts/blickling-fieldbook"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 24992
+
+[services.development]
+run = "pnpm --filter @workspace/blickling-fieldbook run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/blickling-fieldbook", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/blickling-fieldbook/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "24992"
+BASE_PATH = "/"

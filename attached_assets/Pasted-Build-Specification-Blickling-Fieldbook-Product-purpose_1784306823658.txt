@@ -1,0 +1,1279 @@
+Build Specification: Blickling Fieldbook
+
+Product purpose
+
+Build a mobile-first progressive web application called Blickling Fieldbook.
+
+The app will allow countryside staff to record issues, observations and completed work while moving around a large rural estate.
+
+A user must be able to:
+
+1. Record their current location.
+2. Add a short title and description.
+3. Select an observation category.
+4. Add photographs.
+5. set a priority.
+6. Decide whether follow-up action is required.
+7. Assign the resulting action to a team member.
+8. Track the action through to completion.
+9. View observations and actions on a map.
+10. Generate a simple management summary.
+
+The application should initially be suitable for one property and a small team, but the architecture should allow additional properties and teams to be added later.
+
+---
+
+1. Preferred technical approach
+
+Create the application as a responsive full-stack web app that works well on Android and iPhone browsers.
+
+Use:
+
+- TypeScript throughout.
+- React for the user interface.
+- A modern full-stack React framework supported by the Replit environment.
+- PostgreSQL for persistent data.
+- An ORM such as Drizzle or Prisma.
+- Leaflet with OpenStreetMap tiles for the interactive map.
+- A PWA service worker so the app can be installed on a phone.
+- IndexedDB for temporarily storing unsent field records when there is no connection.
+- Server-side authentication.
+- Secure object storage for uploaded images.
+- Zod or an equivalent library for validation.
+- A simple automated test suite for critical workflows.
+
+Use environment variables for all secrets and service credentials.
+
+Do not hard-code API keys, passwords or sensitive configuration.
+
+---
+
+2. Design principles
+
+The application will normally be used outdoors, sometimes in poor weather and with weak mobile reception.
+
+The interface must therefore be:
+
+- Mobile-first.
+- Fast to open.
+- Usable with one hand.
+- Clear in bright daylight.
+- Based on large buttons and generous touch targets.
+- Minimal in the number of required fields.
+- Capable of saving a draft offline.
+- Easy to use without specialist training.
+
+Avoid dense dashboards, small icons, complicated menus and excessive text.
+
+Use plain English throughout.
+
+---
+
+3. User roles
+
+Create three initial user roles.
+
+Administrator
+
+Can:
+
+- Manage users.
+- Manage categories.
+- View all records.
+- Edit all records.
+- Delete records.
+- Reassign actions.
+- Export data.
+- View system settings.
+
+Manager
+
+Can:
+
+- Create observations.
+- View all observations.
+- Create and assign actions.
+- Update observations and actions.
+- Produce reports.
+- Export data.
+- Manage locations and saved map areas.
+
+Team member
+
+Can:
+
+- Create observations.
+- View observations.
+- View actions assigned to them.
+- Update the status of their assigned actions.
+- Add completion notes and photographs.
+
+Design the permissions system so a read-only role could be added later.
+
+---
+
+4. Core terminology
+
+Use the following terms consistently.
+
+Observation
+
+Something noticed or recorded in the field.
+
+Examples:
+
+- A fallen tree across a path.
+- Excessive deer browsing.
+- A damaged gate.
+- A veteran tree feature.
+- A patch of invasive plants.
+- A machinery defect.
+- A completed habitat-management task.
+
+Action
+
+A task created because an observation requires follow-up.
+
+Examples:
+
+- Remove fallen limb.
+- Inspect tree within seven days.
+- Repair field gate.
+- Recut path edge.
+- Survey invasive species extent.
+
+An observation may have no action, one action or several actions.
+
+---
+
+5. Observation categories
+
+Seed the database with the following categories:
+
+- Tree safety
+- Paths and access
+- Habitat condition
+- Deer impact
+- Veteran trees
+- Woodland management
+- Grassland and meadow management
+- Water and wetland
+- Invasive species
+- Boundaries, gates and fencing
+- Visitor incident
+- Infrastructure
+- Machinery and vehicles
+- Tenant or neighbour issue
+- Completed work
+- General observation
+
+Administrators must be able to add, edit, archive and reorder categories.
+
+Allow each category to have:
+
+- Name.
+- Description.
+- Map icon.
+- Display colour.
+- Active or archived status.
+
+---
+
+6. Priority levels
+
+Use four priorities:
+
+Low
+
+No immediate action required.
+
+Normal
+
+Include in routine work planning.
+
+High
+
+Requires prompt attention.
+
+Urgent
+
+Potential immediate risk to people, property, operations or the environment.
+
+Show urgent and high-priority records prominently, but do not rely on colour alone. Include a written priority label and an icon.
+
+---
+
+7. Observation statuses
+
+Use the following statuses:
+
+- Draft
+- Submitted
+- Under review
+- Action required
+- Monitoring
+- Resolved
+- Closed
+- Cancelled
+
+A newly submitted observation should normally begin with the status Submitted.
+
+If an action is created, the observation may automatically move to Action required.
+
+---
+
+8. Action statuses
+
+Use:
+
+- Not started
+- Planned
+- In progress
+- Waiting
+- Completed
+- Cancelled
+
+Actions should support:
+
+- Assigned user.
+- Due date.
+- Priority.
+- Completion date.
+- Completion note.
+- Completion photographs.
+- Reason for cancellation.
+- Date and user responsible for each status change.
+
+---
+
+9. Observation creation workflow
+
+Create a prominent button labelled:
+
+Record an observation
+
+The mobile workflow should use a short step-by-step form.
+
+Step 1: Location
+
+Attempt to capture the phone's GPS location.
+
+Show:
+
+- Latitude.
+- Longitude.
+- Estimated GPS accuracy.
+- A small map preview.
+- A button to retry GPS.
+- An option to manually move the map pin.
+- An option to continue without GPS if necessary.
+
+Store the GPS accuracy value.
+
+Allow the user to select a saved estate area or named location.
+
+Examples of named locations to include as sample data:
+
+- Hercules Wood
+- Great Wood
+- Tollands Meadow
+- Abel Heath
+- Leaselands
+- Holly's Grove
+- The Beeches
+- Mount Covert
+- Osier Carr
+- Parkland
+- Gardens
+- Moorgate
+
+Step 2: Category and title
+
+Required fields:
+
+- Category.
+- Short title.
+
+The title should be limited to approximately 100 characters.
+
+Example:
+
+“Fallen oak limb obstructing footpath”
+
+Step 3: Details
+
+Fields:
+
+- Description.
+- Priority.
+- Date and time observed.
+- Is follow-up action required?
+- Is this a potential safety issue?
+- Is public access affected?
+- Is machinery or specialist equipment likely to be required?
+
+Allow voice dictation through the browser where supported, with typing available as the fallback.
+
+Step 4: Photographs
+
+Allow the user to:
+
+- Take a photograph using the phone camera.
+- Select an existing photograph.
+- Upload several photographs.
+- Remove an image before submission.
+- Add a caption to each image.
+
+Compress large images before upload while retaining enough resolution for inspection and evidence.
+
+Where available, record:
+
+- Image upload date.
+- Uploading user.
+- Image orientation.
+- Whether the image was taken during observation creation or added later.
+
+Do not make photographs mandatory.
+
+Step 5: Review and submit
+
+Show a clear summary.
+
+The user can:
+
+- Submit the observation.
+- Save as a draft.
+- Create an action immediately.
+- Cancel and discard the record.
+
+When offline, save the complete observation locally and clearly label it:
+
+Waiting to sync
+
+Automatically attempt to sync when connectivity returns.
+
+Never silently discard an unsynced observation.
+
+---
+
+10. Map
+
+Create an interactive map page.
+
+The map should:
+
+- Display observation markers.
+- Centre on the estate area.
+- Use marker clustering when many records are visible.
+- Allow zooming and panning.
+- Allow the user to select a marker and open a summary card.
+- Link from the summary card to the full observation.
+- Show the user's current location when permission is granted.
+
+Add filters for:
+
+- Category.
+- Priority.
+- Observation status.
+- Assigned person.
+- Date range.
+- Saved estate area.
+- Safety issue.
+- Public access affected.
+- Open or resolved records.
+
+Provide a choice between:
+
+- Map view.
+- List view.
+
+The filters should persist when switching between map and list views.
+
+---
+
+11. Observation detail page
+
+Display:
+
+- Title.
+- Category.
+- Priority.
+- Status.
+- Date observed.
+- Reporting user.
+- Named location.
+- Coordinates.
+- GPS accuracy.
+- Map.
+- Description.
+- Safety and access flags.
+- Photographs.
+- Linked actions.
+- Activity history.
+- Created date.
+- Last updated date.
+
+Available actions should depend on permissions.
+
+Possible buttons:
+
+- Edit observation.
+- Add photograph.
+- Create action.
+- Change status.
+- Add note.
+- Mark resolved.
+- View on map.
+
+---
+
+12. Action creation
+
+An action can be created from an observation.
+
+Fields:
+
+- Action title.
+- Description.
+- Assigned user.
+- Priority.
+- Due date.
+- Status.
+- Estimated time.
+- Equipment required.
+- Contractor required.
+- Notes.
+
+Allow the action title and description to be pre-filled from the observation.
+
+The user must be able to edit them before saving.
+
+---
+
+13. My actions page
+
+Create a mobile-friendly page called:
+
+My actions
+
+Show sections for:
+
+- Overdue.
+- Due today.
+- Due this week.
+- Later.
+- Completed recently.
+
+Each action card should show:
+
+- Action title.
+- Related observation.
+- Priority.
+- Due date.
+- Named location.
+- Current status.
+
+Users should be able to update an action quickly from this page.
+
+Add quick buttons for:
+
+- Start.
+- Mark waiting.
+- Complete.
+- Open details.
+
+Completing an action should request:
+
+- Completion note.
+- Completion date.
+- Optional completion photographs.
+
+---
+
+14. Dashboard
+
+Create a simple manager dashboard.
+
+Show:
+
+- Open observations.
+- Urgent observations.
+- High-priority observations.
+- Overdue actions.
+- Actions due this week.
+- Observations created in the last 30 days.
+- Actions completed in the last 30 days.
+- Unsynced records, if applicable.
+
+Add simple charts for:
+
+- Observations by category.
+- Observations by status.
+- Open actions by assignee.
+- Observations created over time.
+
+Charts should be accessible and accompanied by written values.
+
+---
+
+15. Reports
+
+Create a reporting page with selectable date ranges.
+
+Support:
+
+- This week.
+- This month.
+- Previous month.
+- This quarter.
+- Custom date range.
+
+The management summary should include:
+
+- Number of new observations.
+- Number of resolved observations.
+- Number of actions created.
+- Number of actions completed.
+- Number of overdue actions.
+- Urgent and high-priority items.
+- Breakdown by category.
+- Breakdown by named estate area.
+- Outstanding safety issues.
+- Outstanding public-access issues.
+
+Allow export as:
+
+- CSV.
+- Printable HTML report.
+
+Design the printable report so it can be saved as a PDF through the browser print function.
+
+---
+
+16. Search
+
+Provide global search across:
+
+- Observation title.
+- Observation description.
+- Action title.
+- Action description.
+- Named location.
+- Category.
+- Reporting user.
+- Assigned user.
+
+Allow the user to combine text search with filters.
+
+---
+
+17. Activity history and audit trail
+
+Maintain an audit history for important events.
+
+Record:
+
+- Observation created.
+- Observation edited.
+- Status changed.
+- Priority changed.
+- Action created.
+- Action reassigned.
+- Action completed.
+- Photograph added.
+- Note added.
+- Record deleted or archived.
+
+Store:
+
+- User.
+- Timestamp.
+- Event type.
+- Previous value where relevant.
+- New value where relevant.
+
+Display a readable activity timeline on observation and action pages.
+
+---
+
+18. Data model
+
+Create database tables or equivalent models for the following entities.
+
+Property
+
+Fields:
+
+- id
+- name
+- description
+- defaultLatitude
+- defaultLongitude
+- defaultZoom
+- createdAt
+- updatedAt
+
+Although the first version has one property, every relevant record should include a property ID.
+
+User
+
+Fields:
+
+- id
+- name
+- email
+- passwordHash or authentication provider ID
+- role
+- active
+- propertyId
+- createdAt
+- updatedAt
+- lastLoginAt
+
+Category
+
+Fields:
+
+- id
+- propertyId
+- name
+- description
+- icon
+- displayColour
+- sortOrder
+- active
+- createdAt
+- updatedAt
+
+NamedLocation
+
+Fields:
+
+- id
+- propertyId
+- name
+- description
+- latitude
+- longitude
+- optional boundary geometry
+- active
+- createdAt
+- updatedAt
+
+Observation
+
+Fields:
+
+- id
+- propertyId
+- referenceNumber
+- title
+- description
+- categoryId
+- priority
+- status
+- observedAt
+- reportedByUserId
+- latitude
+- longitude
+- gpsAccuracyMetres
+- namedLocationId
+- safetyIssue
+- publicAccessAffected
+- machineryRequired
+- specialistRequired
+- followUpRequired
+- createdOffline
+- syncedAt
+- resolvedAt
+- closedAt
+- createdAt
+- updatedAt
+
+Create a human-readable reference number such as:
+
+BLK-2026-00001
+
+ObservationImage
+
+Fields:
+
+- id
+- observationId
+- storageKey
+- originalFilename
+- mimeType
+- fileSize
+- caption
+- imageType
+- uploadedByUserId
+- createdAt
+
+The image type should distinguish between:
+
+- Observation
+- Progress
+- Completion
+
+Action
+
+Fields:
+
+- id
+- propertyId
+- observationId
+- referenceNumber
+- title
+- description
+- assignedToUserId
+- createdByUserId
+- priority
+- status
+- dueDate
+- estimatedMinutes
+- equipmentRequired
+- contractorRequired
+- waitingReason
+- cancellationReason
+- completedAt
+- completionNote
+- createdAt
+- updatedAt
+
+Use references such as:
+
+ACT-2026-00001
+
+ActionImage
+
+Fields:
+
+- id
+- actionId
+- storageKey
+- originalFilename
+- mimeType
+- fileSize
+- caption
+- uploadedByUserId
+- createdAt
+
+Note
+
+Fields:
+
+- id
+- observationId
+- actionId
+- body
+- createdByUserId
+- createdAt
+- updatedAt
+
+A note should relate to either an observation or an action.
+
+AuditEvent
+
+Fields:
+
+- id
+- propertyId
+- observationId
+- actionId
+- userId
+- eventType
+- fieldName
+- previousValue
+- newValue
+- metadata
+- createdAt
+
+---
+
+19. Offline behaviour
+
+Offline support is important but must be implemented conservatively.
+
+For the first version:
+
+- Allow new observations to be completed offline.
+- Store offline observations and image references in IndexedDB.
+- Show a visible count of records waiting to sync.
+- Sync automatically when the connection returns.
+- Provide a manual retry button.
+- Prevent duplicate submissions by giving every offline record a locally generated unique ID.
+- Show whether the latest sync succeeded or failed.
+- Retain failed records until the user explicitly deletes them.
+
+Do not initially allow complex offline editing of existing records.
+
+That can be added later.
+
+---
+
+20. Authentication and security
+
+Implement secure login.
+
+Requirements:
+
+- Passwords must never be stored in plain text.
+- Use secure sessions or signed authentication tokens.
+- Protect all server routes.
+- Validate user permissions on the server, not only in the interface.
+- Rate-limit login attempts.
+- Validate all submitted data.
+- Restrict uploaded file types.
+- Restrict maximum upload size.
+- Generate non-guessable file names.
+- Do not expose storage credentials to the browser.
+- Include CSRF protection where required by the chosen architecture.
+- Use secure cookies in production.
+- Log security-sensitive administrative actions.
+
+Create a seeded administrator account for development only.
+
+The initial password must come from an environment variable and must not be committed to source control.
+
+---
+
+21. Accessibility
+
+Aim for WCAG 2.2 AA where practical.
+
+Requirements:
+
+- Keyboard-accessible controls.
+- Visible focus states.
+- Proper labels for form fields.
+- Sufficient text contrast.
+- Error messages associated with the relevant fields.
+- Icons accompanied by text or accessible labels.
+- Do not convey status through colour alone.
+- Large touch targets.
+- Meaningful page titles and headings.
+- Alternative text for informative images.
+
+---
+
+22. Initial pages
+
+Create the following routes or pages:
+
+- Login
+- Dashboard
+- Record observation
+- Observation list
+- Observation map
+- Observation detail
+- Edit observation
+- My actions
+- All actions
+- Action detail
+- Reports
+- Users
+- Categories
+- Named locations
+- Settings
+- Offline sync status
+
+Use a bottom navigation bar on mobile with:
+
+- Home
+- Map
+- Record
+- Actions
+- More
+
+The Record button should be visually prominent.
+
+Use a conventional sidebar navigation on desktop.
+
+---
+
+23. Seed data
+
+Create realistic development data.
+
+Seed:
+
+- One property: Blickling Estate.
+- One administrator.
+- One manager.
+- Two team members.
+- All default categories.
+- The named estate locations listed above.
+- At least 20 observations.
+- At least 15 actions.
+- A mixture of priorities and statuses.
+- Several overdue actions.
+- Several resolved observations.
+
+Do not use real personal email addresses or sensitive information in seed data.
+
+---
+
+24. Sample records
+
+Include examples such as:
+
+Observation 1
+
+Title: Fallen oak limb obstructing Lake Walk
+
+Category: Paths and access
+
+Priority: High
+
+Status: Action required
+
+Location: Parkland
+
+Safety issue: Yes
+
+Public access affected: Yes
+
+Action: Inspect and remove obstruction
+
+Observation 2
+
+Title: Heavy browsing of coppice regrowth
+
+Category: Deer impact
+
+Priority: Normal
+
+Status: Monitoring
+
+Location: Hercules Wood
+
+Safety issue: No
+
+Public access affected: No
+
+Observation 3
+
+Title: Damaged pedestrian gate latch
+
+Category: Boundaries, gates and fencing
+
+Priority: Normal
+
+Status: Action required
+
+Location: Abel Heath
+
+Action: Repair or replace latch
+
+Observation 4
+
+Title: Ragwort patch beside meadow boundary
+
+Category: Habitat condition
+
+Priority: Normal
+
+Status: Under review
+
+Location: Tollands Meadow
+
+Observation 5
+
+Title: Ryetec mower vibration and bearing failure
+
+Category: Machinery and vehicles
+
+Priority: Urgent
+
+Status: Action required
+
+Location: Machinery yard
+
+Action: Obtain repair estimate and assess operational impact
+
+---
+
+25. Validation rules
+
+Require:
+
+- Observation title.
+- Category.
+- Priority.
+- Observation date.
+- Reporting user.
+
+Require valid coordinates when GPS location is supplied.
+
+Do not require coordinates if the user deliberately chooses to continue without GPS.
+
+Require:
+
+- Action title.
+- Priority.
+- Status.
+
+Require a completion note when an action is marked completed.
+
+Require a cancellation reason when an observation or action is cancelled.
+
+Ensure due dates and observation dates use the user's local timezone.
+
+Use the Europe/London timezone as the default.
+
+---
+
+26. Error handling
+
+Display clear user-facing errors.
+
+Examples:
+
+- Location permission was denied.
+- GPS accuracy is poor.
+- Image upload failed.
+- Observation was saved offline.
+- Sync failed and will be retried.
+- Session expired.
+- User does not have permission.
+- Record was changed by another user.
+
+Do not expose stack traces, database errors or secrets to users.
+
+Log technical errors on the server.
+
+---
+
+27. Testing requirements
+
+Add tests for the critical workflows.
+
+At minimum, test:
+
+- User login.
+- Role-based access.
+- Observation creation.
+- Observation validation.
+- Action creation.
+- Action assignment.
+- Action completion.
+- Map data endpoint.
+- Report calculations.
+- Offline record ID handling.
+- Prevention of unauthorised editing.
+- Image upload validation.
+
+Add a simple smoke-test script that confirms:
+
+- The application starts.
+- The database connection works.
+- Database migrations are current.
+- Seed data can be created.
+- The health-check endpoint responds successfully.
+
+---
+
+28. Development phases
+
+Implement the application in controlled phases.
+
+Phase 1: Core functioning application
+
+Build:
+
+- Authentication.
+- User roles.
+- Observation creation.
+- Observation list.
+- Observation detail.
+- Action creation.
+- My actions.
+- Basic dashboard.
+- PostgreSQL data model.
+- Seed data.
+- Responsive mobile layout.
+
+Do not begin advanced offline support until the Phase 1 workflow is functioning and tested.
+
+Phase 2: Map and photographs
+
+Build:
+
+- Leaflet map.
+- Observation markers.
+- Map filters.
+- GPS capture.
+- Manual pin adjustment.
+- Image upload.
+- Image compression.
+- Photograph galleries.
+
+Phase 3: Offline field recording
+
+Build:
+
+- PWA installation.
+- IndexedDB storage.
+- Offline observation creation.
+- Sync queue.
+- Retry handling.
+- Duplicate prevention.
+- Sync status page.
+
+Phase 4: Reporting and administration
+
+Build:
+
+- Management dashboard.
+- Report date filters.
+- CSV export.
+- Printable report.
+- User management.
+- Category management.
+- Named-location management.
+- Audit history.
+
+---
+
+29. MVP acceptance criteria
+
+The first useful release will be accepted when all of the following are true:
+
+1. A user can log in securely.
+2. A team member can create an observation from a mobile phone.
+3. The app can capture or manually set the observation location.
+4. A user can upload at least one photograph.
+5. A manager can view the observation.
+6. A manager can create and assign an action.
+7. The assigned team member can see the action in My Actions.
+8. The team member can mark the action completed and add a completion note.
+9. The manager can see the completed action and activity history.
+10. Observations can be viewed on a map.
+11. Records can be filtered by category, priority, status and location.
+12. The app works at common mobile screen sizes.
+13. A field observation can be saved when connectivity is lost and synced later.
+14. The app does not lose an unsynced record.
+15. A manager can produce a basic monthly summary.
+
+---
+
+30. Important implementation instructions
+
+Before writing large amounts of code:
+
+1. Create a concise architecture summary.
+2. Create the proposed database schema.
+3. List the packages and external services required.
+4. Identify any implementation risks.
+5. Generate the initial project structure.
+6. Implement Phase 1 first.
+7. Run migrations and seed the database.
+8. Test the complete observation-to-action workflow.
+9. Fix errors before moving to Phase 2.
+10. Keep the README updated as the application develops.
+
+Do not replace working functionality merely to change frameworks or libraries.
+
+Prefer straightforward, maintainable code over unnecessary abstraction.
+
+Add comments only where the reasoning is not obvious.
+
+Use reusable components for forms, status labels, priority labels, image upload and map filters.
+
+---
+
+31. README requirements
+
+Create a README containing:
+
+- Product purpose.
+- Technical architecture.
+- Local development instructions.
+- Required environment variables.
+- Database setup.
+- Migration commands.
+- Seed commands.
+- Test commands.
+- Production deployment guidance.
+- Image-storage configuration.
+- Offline-sync explanation.
+- Default development accounts.
+- Known limitations.
+- Suggested next features.
+
+---
+
+32. Environment variables
+
+Support environment variables similar to:
+
+DATABASE_URL=
+
+SESSION_SECRET=
+
+INITIAL_ADMIN_EMAIL=
+
+INITIAL_ADMIN_PASSWORD=
+
+OBJECT_STORAGE_ENDPOINT=
+
+OBJECT_STORAGE_BUCKET=
+
+OBJECT_STORAGE_ACCESS_KEY=
+
+OBJECT_STORAGE_SECRET_KEY=
+
+OBJECT_STORAGE_PUBLIC_URL=
+
+APP_BASE_URL=
+
+Optional future integration:
+
+WHAT3WORDS_API_KEY=
+
+Do not require the optional What3Words integration for the MVP.
+
+---
+
+33. Future features to prepare for but not build yet
+
+Design the architecture so the following could be added later:
+
+- Multiple estates or properties.
+- What3Words conversion.
+- Automatic weather data attached to observations.
+- QR codes on machinery and infrastructure.
+- Tree inspection forms.
+- Deer impact survey forms.
+- Meadow-monitoring forms.
+- Contractor access.
+- Volunteer task lists.
+- Email notifications.
+- Push notifications.
+- Calendar integration.
+- GIS boundary layers.
+- GeoJSON import and export.
+- Integration with Power BI or another reporting platform.
+- Artificial intelligence-assisted summaries.
+- Automatic conversion of voice notes into structured reports.
+- Public visitor-reporting form.
+- Asset and machinery maintenance module.
+
+Do not implement these until the core application is stable.
+
+---
+
+34. First response required from the coding agent
+
+Before starting implementation, respond with:
+
+1. The selected application framework.
+2. The proposed folder structure.
+3. The database schema approach.
+4. The authentication approach.
+5. The image-storage approach.
+6. The offline-sync approach.
+7. Any assumptions being made.
+8. The exact Phase 1 features that will be implemented first.
+
+Then begin building Phase 1.
