@@ -81,34 +81,37 @@ export default function Dashboard() {
           <CardHeader>
             <CardTitle className="text-base">Observations by Category</CardTitle>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={charts.byCategory}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={2}
-                  dataKey="value"
-                  nameKey="label"
-                >
-                  {charts.byCategory.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.colour || pieColors[index % pieColors.length]} />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
-                  itemStyle={{ color: '#1a1a1a' }}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="flex flex-wrap justify-center gap-3 mt-4 text-xs">
+          <CardContent>
+            <div className="h-[220px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={charts.byCategory}
+                    cx="50%"
+                    cy="50%"
+                    innerRadius={55}
+                    outerRadius={80}
+                    paddingAngle={2}
+                    dataKey="value"
+                    nameKey="label"
+                  >
+                    {charts.byCategory.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.colour || pieColors[index % pieColors.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}
+                    itemStyle={{ color: '#1a1a1a' }}
+                    formatter={(value, name) => [value, name]}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex flex-wrap justify-center gap-x-4 gap-y-2 mt-4 text-xs border-t pt-4">
               {charts.byCategory.map((c, i) => (
-                <div key={c.label} className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded-full" style={{ backgroundColor: c.colour || pieColors[i % pieColors.length] }}></div>
-                  <span>{c.label}</span>
+                <div key={c.label} className="flex items-center gap-1.5 min-w-0">
+                  <div className="w-2.5 h-2.5 rounded-sm flex-shrink-0" style={{ backgroundColor: c.colour || pieColors[i % pieColors.length] }}></div>
+                  <span className="text-muted-foreground truncate">{c.label}</span>
                 </div>
               ))}
             </div>
