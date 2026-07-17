@@ -1,157 +1,230 @@
 import React, { useState } from "react"
 import { useGetReportSummary } from "@workspace/api-client-react"
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Download, Printer, TrendingUp, AlertTriangle, CheckCircle2 } from "lucide-react"
+import { FileText, TrendingUp, AlertTriangle, CheckCircle2, Printer, Download } from "lucide-react"
+
+const C = {
+  bg: "#0d1117",
+  surface: "#161b22",
+  border: "#30363d",
+  borderMid: "#21262d",
+  text: "#e6edf3",
+  muted: "#8b949e",
+  dim: "#484f58",
+  emerald: "#10b981",
+  emeraldDark: "#0d9268",
+  emeraldDim: "#065f46",
+  urgent: "#f85149",
+  high: "#d29922",
+  blue: "#58a6ff",
+}
+
+const HEAD = { fontFamily: "'Space Grotesk', sans-serif" }
+const BODY = { fontFamily: "'Inter', sans-serif" }
 
 export default function Reports() {
   const [dateFrom, setDateFrom] = useState(() => {
-    const d = new Date();
-    d.setDate(d.getDate() - 30);
-    return d.toISOString().split('T')[0];
+    const d = new Date()
+    d.setDate(d.getDate() - 30)
+    return d.toISOString().split('T')[0]
   })
-  
-  const [dateTo, setDateTo] = useState(() => {
-    return new Date().toISOString().split('T')[0];
-  })
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
 
   const { data: summary, isLoading } = useGetReportSummary({ dateFrom, dateTo })
 
-  if (isLoading || !summary) {
-    return <div className="p-12 flex justify-center"><div className="animate-pulse h-8 w-8 bg-primary rounded-full"></div></div>
+  const handlePrint = () => window.print()
+
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center" style={{ minHeight: 200 }}>
+        <div className="flex gap-1.5">
+          {[0, 1, 2].map(i => (
+            <div
+              key={i}
+              className="animate-bounce w-2 h-2 rounded-full"
+              style={{ backgroundColor: C.emerald, animationDelay: `${i * 0.15}s` }}
+            />
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  const handlePrint = () => {
-    window.print()
+  if (!summary) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 gap-3">
+        <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#21262d" }}>
+          <FileText className="w-7 h-7" style={{ color: C.dim }} />
+        </div>
+        <p style={{ ...BODY, color: C.muted, fontSize: 14 }}>No report data available</p>
+      </div>
+    )
   }
+
+  const maxCat = summary.byCategory && summary.byCategory.length > 0
+    ? Math.max(...summary.byCategory.map(c => c.value))
+    : 1
 
   return (
     <div className="max-w-5xl mx-auto space-y-6">
+      {/* Page header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Management Reports</h1>
-          <p className="text-muted-foreground">Estate performance metrics and analysis</p>
+          <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Management Reports</h1>
+          <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Estate performance metrics and analysis</p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={handlePrint}>
-            <Printer className="w-4 h-4 mr-2" /> Print Report
-          </Button>
-          <Button>
-            <Download className="w-4 h-4 mr-2" /> Export CSV
-          </Button>
+          <button
+            onClick={handlePrint}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+            style={{ background: "transparent", border: `1px solid ${C.border}`, color: C.muted, ...HEAD }}
+            onMouseEnter={e => { (e.currentTarget as HTMLButtonElement).style.background = C.borderMid; (e.currentTarget as HTMLButtonElement).style.color = C.text }}
+            onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = "transparent"; (e.currentTarget as HTMLButtonElement).style.color = C.muted }}
+          >
+            <Printer className="w-4 h-4" /> Print
+          </button>
+          <button
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+            style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
+          >
+            <Download className="w-4 h-4" /> Export CSV
+          </button>
         </div>
       </div>
 
-      <Card className="print:hidden">
-        <CardContent className="p-4 flex flex-col sm:flex-row gap-4 items-center bg-muted/20">
-          <div className="font-medium text-sm text-muted-foreground mr-2">Date Range:</div>
-          <div className="flex items-center gap-2 w-full sm:w-auto">
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} className="w-full sm:w-[160px] bg-white h-9" />
-            <span className="text-muted-foreground">to</span>
-            <Input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)} className="w-full sm:w-[160px] bg-white h-9" />
-          </div>
-        </CardContent>
-      </Card>
-
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="border-t-4 border-t-primary">
-          <CardHeader className="pb-2 pt-4">
-            <CardDescription>New Observations</CardDescription>
-            <CardTitle className="text-3xl flex items-center justify-between">
-              {summary.newObservations}
-              <TrendingUp className="w-5 h-5 text-muted-foreground opacity-50" />
-            </CardTitle>
-          </CardHeader>
-        </Card>
-        
-        <Card className="border-t-4 border-t-green-500">
-          <CardHeader className="pb-2 pt-4">
-            <CardDescription>Actions Completed</CardDescription>
-            <CardTitle className="text-3xl flex items-center justify-between">
-              {summary.actionsCompleted}
-              <CheckCircle2 className="w-5 h-5 text-green-500 opacity-50" />
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="border-t-4 border-t-destructive">
-          <CardHeader className="pb-2 pt-4">
-            <CardDescription>Overdue Actions</CardDescription>
-            <CardTitle className="text-3xl text-destructive flex items-center justify-between">
-              {summary.overdueActions}
-              <AlertTriangle className="w-5 h-5 text-destructive opacity-50" />
-            </CardTitle>
-          </CardHeader>
-        </Card>
-
-        <Card className="border-t-4 border-t-orange-500">
-          <CardHeader className="pb-2 pt-4">
-            <CardDescription>Urgent/High Items</CardDescription>
-            <CardTitle className="text-3xl text-orange-600 flex items-center justify-between">
-              {(summary.urgentItems || 0) + (summary.highItems || 0)}
-              <AlertTriangle className="w-5 h-5 text-orange-600 opacity-50" />
-            </CardTitle>
-          </CardHeader>
-        </Card>
+      {/* Date range picker */}
+      <div
+        className="flex flex-col sm:flex-row gap-4 items-center p-4 rounded-xl print:hidden"
+        style={{ background: C.surface, border: `1px solid ${C.border}` }}
+      >
+        <span style={{ ...BODY, fontSize: 13, color: C.muted, whiteSpace: "nowrap" }}>Date Range:</span>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={e => setDateFrom(e.target.value)}
+            style={{
+              background: C.bg, border: `1px solid ${C.border}`, color: C.text,
+              borderRadius: "0.625rem", padding: "0.4rem 0.75rem", fontSize: 13,
+              ...BODY, outline: "none", width: 160,
+            }}
+            onFocus={e => (e.target as HTMLInputElement).style.borderColor = C.emerald}
+            onBlur={e => (e.target as HTMLInputElement).style.borderColor = C.border}
+          />
+          <span style={{ color: C.muted, fontSize: 13 }}>to</span>
+          <input
+            type="date"
+            value={dateTo}
+            onChange={e => setDateTo(e.target.value)}
+            style={{
+              background: C.bg, border: `1px solid ${C.border}`, color: C.text,
+              borderRadius: "0.625rem", padding: "0.4rem 0.75rem", fontSize: 13,
+              ...BODY, outline: "none", width: 160,
+            }}
+            onFocus={e => (e.target as HTMLInputElement).style.borderColor = C.emerald}
+            onBlur={e => (e.target as HTMLInputElement).style.borderColor = C.border}
+          />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Breakdown by Category</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {summary.byCategory && summary.byCategory.length > 0 ? (
-              <div className="space-y-4">
-                {summary.byCategory.map(cat => (
-                  <div key={cat.label}>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span>{cat.label}</span>
-                      <span className="font-medium">{cat.value}</span>
-                    </div>
-                    <div className="w-full bg-muted rounded-full h-2">
-                      <div 
-                        className="h-2 rounded-full" 
-                        style={{ 
-                          width: `${(cat.value / Math.max(...summary.byCategory!.map(c => c.value))) * 100}%`,
-                          backgroundColor: cat.colour || 'hsl(var(--primary))'
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground">No data for this period.</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Safety & Access Issues</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-               <div className="flex items-center justify-between p-4 bg-red-50 rounded-lg border border-red-100">
-                 <div className="flex items-center gap-3 text-red-900 font-medium">
-                   <AlertTriangle className="text-red-600" />
-                   Outstanding Safety Issues
-                 </div>
-                 <div className="text-2xl font-bold text-red-700">{summary.outstandingSafetyIssues || 0}</div>
-               </div>
-               
-               <div className="flex items-center justify-between p-4 bg-orange-50 rounded-lg border border-orange-100">
-                 <div className="flex items-center gap-3 text-orange-900 font-medium">
-                   <AlertTriangle className="text-orange-600" />
-                   Outstanding Access Issues
-                 </div>
-                 <div className="text-2xl font-bold text-orange-700">{summary.outstandingAccessIssues || 0}</div>
-               </div>
+      {/* Metric tiles */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          { label: "New Observations", value: summary.newObservations, color: C.blue, icon: TrendingUp },
+          { label: "Actions Completed", value: summary.actionsCompleted, color: C.emerald, icon: CheckCircle2 },
+          { label: "Overdue Actions", value: summary.overdueActions, color: C.urgent, icon: AlertTriangle },
+          { label: "Urgent / High", value: (summary.urgentItems || 0) + (summary.highItems || 0), color: C.high, icon: AlertTriangle },
+        ].map(({ label, value, color, icon: Icon }) => (
+          <div
+            key={label}
+            className="rounded-xl p-4"
+            style={{
+              background: C.surface,
+              border: `1px solid ${C.border}`,
+              borderTop: `3px solid ${color}`,
+            }}
+          >
+            <div className="flex items-center justify-between mb-2">
+              <span style={{ ...BODY, fontSize: 12, color: C.muted }}>{label}</span>
+              <Icon className="w-4 h-4" style={{ color, opacity: 0.5 }} />
             </div>
-          </CardContent>
-        </Card>
+            <div style={{ ...HEAD, fontSize: 30, fontWeight: 700, color }}>{value}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Bottom cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        {/* Category breakdown */}
+        <div className="rounded-xl p-5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+          <h2 style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16 }}>
+            Breakdown by Category
+          </h2>
+          {summary.byCategory && summary.byCategory.length > 0 ? (
+            <div className="space-y-4">
+              {summary.byCategory.map(cat => (
+                <div key={cat.label}>
+                  <div className="flex justify-between mb-1">
+                    <span style={{ ...BODY, fontSize: 13, color: C.text }}>{cat.label}</span>
+                    <span style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: C.text }}>{cat.value}</span>
+                  </div>
+                  <div className="w-full rounded-full h-2" style={{ background: C.borderMid }}>
+                    <div
+                      className="h-2 rounded-full"
+                      style={{
+                        width: `${(cat.value / maxCat) * 100}%`,
+                        backgroundColor: cat.colour || C.emerald,
+                        transition: "width 0.3s ease",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p style={{ ...BODY, fontSize: 13, color: C.muted }}>No data for this period.</p>
+          )}
+        </div>
+
+        {/* Safety & Access */}
+        <div className="rounded-xl p-5" style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+          <h2 style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: C.text, marginBottom: 16 }}>
+            Safety &amp; Access Issues
+          </h2>
+          <div className="space-y-4">
+            <div
+              className="flex items-center justify-between p-4 rounded-lg"
+              style={{
+                background: "rgba(248,81,73,0.08)",
+                border: "1px solid rgba(248,81,73,0.2)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5" style={{ color: C.urgent }} />
+                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Safety Issues</span>
+              </div>
+              <span style={{ ...HEAD, fontSize: 24, fontWeight: 700, color: C.urgent }}>
+                {summary.outstandingSafetyIssues || 0}
+              </span>
+            </div>
+            <div
+              className="flex items-center justify-between p-4 rounded-lg"
+              style={{
+                background: "rgba(210,153,34,0.08)",
+                border: "1px solid rgba(210,153,34,0.2)",
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="w-5 h-5" style={{ color: C.high }} />
+                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Access Issues</span>
+              </div>
+              <span style={{ ...HEAD, fontSize: 24, fontWeight: 700, color: C.high }}>
+                {summary.outstandingAccessIssues || 0}
+              </span>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   )

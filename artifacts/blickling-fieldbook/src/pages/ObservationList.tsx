@@ -1,125 +1,308 @@
 import React, { useState } from "react"
 import { useListObservations } from "@workspace/api-client-react"
-import { Card, CardContent } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Badge } from "@/components/ui/badge"
-import { Search, Filter, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin } from "lucide-react"
+import { Search, Filter, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, ShieldAlert } from "lucide-react"
 import { Link } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 
+const C = {
+  bg: "#0d1117",
+  surface: "#161b22",
+  border: "#30363d",
+  borderMid: "#21262d",
+  text: "#e6edf3",
+  muted: "#8b949e",
+  dim: "#484f58",
+  emerald: "#10b981",
+  emeraldDark: "#0d9268",
+  emeraldDim: "#065f46",
+  emeraldTint: "rgba(16,185,129,0.08)",
+  urgent: "#f85149",
+  urgentTint: "rgba(248,81,73,0.12)",
+  high: "#d29922",
+  highTint: "rgba(210,153,34,0.12)",
+  blue: "#58a6ff",
+  blueTint: "rgba(88,166,255,0.12)",
+  purple: "#a78bfa",
+}
+
+const HEAD = { fontFamily: "'Space Grotesk', sans-serif" }
+const BODY = { fontFamily: "'Inter', sans-serif" }
+
+function priorityConfig(p: string) {
+  switch (p) {
+    case "urgent": return { color: "#f85149", bg: "rgba(248,81,73,0.12)", label: "Urgent" }
+    case "high":   return { color: "#d29922", bg: "rgba(210,153,34,0.12)", label: "High" }
+    case "normal": return { color: "#58a6ff", bg: "rgba(88,166,255,0.12)", label: "Normal" }
+    default:       return { color: "#8b949e", bg: "rgba(139,148,158,0.12)", label: "Low" }
+  }
+}
+
+function priorityBorderColor(p: string) {
+  switch (p) {
+    case "urgent": return "#f85149"
+    case "high":   return "#d29922"
+    case "normal": return "#58a6ff"
+    default:       return "#8b949e"
+  }
+}
+
+function statusColor(s: string) {
+  switch (s) {
+    case "action_required": return "#f85149"
+    case "submitted":       return "#58a6ff"
+    case "under_review":    return "#a78bfa"
+    case "monitoring":      return "#34d399"
+    case "resolved":        return "#10b981"
+    case "closed":          return "#484f58"
+    case "cancelled":       return "#484f58"
+    default:                return "#8b949e"
+  }
+}
+function statusBg(s: string) { return statusColor(s) + "1a" }
+function statusLabel(s: string) { return s.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) }
+
+const PriorityIcon = ({ p }: { p: string }) => {
+  switch (p) {
+    case 'urgent': return <AlertTriangle className="w-3 h-3" />
+    case 'high':   return <ArrowUp className="w-3 h-3" />
+    case 'normal': return <Minus className="w-3 h-3" />
+    case 'low':    return <ArrowDown className="w-3 h-3" />
+    default:       return null
+  }
+}
+
 export default function ObservationList() {
   const [search, setSearch] = useState("")
+  const [searchFocused, setSearchFocused] = useState(false)
   const { data: listData, isLoading } = useListObservations({ status: '', search })
-
-  const PriorityIcon = ({ p }: { p: string }) => {
-    switch (p) {
-      case 'urgent': return <AlertTriangle className="w-3 h-3" />
-      case 'high': return <ArrowUp className="w-3 h-3" />
-      case 'normal': return <Minus className="w-3 h-3" />
-      case 'low': return <ArrowDown className="w-3 h-3" />
-      default: return null
-    }
-  }
-
-  const getPriorityColor = (p: string) => {
-    switch (p) {
-      case 'urgent': return 'text-destructive bg-destructive/10'
-      case 'high': return 'text-orange-600 bg-orange-100'
-      case 'normal': return 'text-blue-600 bg-blue-100'
-      case 'low': return 'text-slate-600 bg-slate-100'
-      default: return 'text-muted-foreground bg-muted'
-    }
-  }
-
-  const getStatusColor = (s: string) => {
-    switch (s) {
-      case 'draft': return 'bg-slate-200 text-slate-700'
-      case 'submitted': return 'bg-blue-100 text-blue-700'
-      case 'under_review': return 'bg-purple-100 text-purple-700'
-      case 'action_required': return 'bg-amber-100 text-amber-700'
-      case 'monitoring': return 'bg-teal-100 text-teal-700'
-      case 'resolved': return 'bg-green-100 text-green-700'
-      case 'closed': return 'bg-slate-800 text-slate-100'
-      case 'cancelled': return 'bg-slate-100 text-slate-400'
-      default: return 'bg-muted text-muted-foreground'
-    }
-  }
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-start sm:items-center">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">Observations</h1>
-          <p className="text-muted-foreground">Field records across the estate</p>
-        </div>
+      {/* Page header */}
+      <div>
+        <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Observations</h1>
+        <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Field records across the estate</p>
       </div>
 
+      {/* Search + Filters */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="Search reference, title, location..." 
-            className="pl-9 bg-white"
+          <Search
+            className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4"
+            style={{ color: C.dim }}
+          />
+          <input
+            placeholder="Search reference, title, location..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setSearchFocused(false)}
+            style={{
+              ...BODY,
+              width: "100%",
+              background: C.bg,
+              border: `1px solid ${searchFocused ? C.emerald : C.border}`,
+              borderRadius: "0.625rem",
+              color: C.text,
+              fontSize: 14,
+              padding: "8px 12px 8px 36px",
+              outline: "none",
+              transition: "border-color 0.15s",
+            }}
           />
         </div>
-        <button className="px-4 py-2 bg-white border rounded-md shadow-sm text-sm font-medium flex items-center gap-2 hover:bg-muted/50">
+        <button
+          style={{
+            background: "transparent",
+            border: `1px solid ${C.border}`,
+            borderRadius: "0.625rem",
+            color: C.muted,
+            fontSize: 13,
+            fontWeight: 500,
+            padding: "8px 14px",
+            display: "flex",
+            alignItems: "center",
+            gap: 6,
+            cursor: "pointer",
+            ...HEAD,
+          }}
+          onMouseEnter={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = C.borderMid
+            ;(e.currentTarget as HTMLButtonElement).style.color = C.text
+          }}
+          onMouseLeave={e => {
+            (e.currentTarget as HTMLButtonElement).style.background = "transparent"
+            ;(e.currentTarget as HTMLButtonElement).style.color = C.muted
+          }}
+        >
           <Filter className="h-4 w-4" /> Filters
         </button>
       </div>
 
+      {/* Loading */}
       {isLoading ? (
-        <div className="flex justify-center p-12"><div className="animate-pulse h-8 w-8 bg-primary rounded-full" /></div>
+        <div className="flex justify-center items-center p-12 gap-2">
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "150ms" }} />
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "300ms" }} />
+        </div>
       ) : listData?.observations.length === 0 ? (
-        <div className="text-center p-12 bg-muted/30 border border-dashed rounded-xl">
-          <p className="text-muted-foreground">No observations found.</p>
+        /* Empty state */
+        <div
+          className="flex flex-col items-center justify-center p-12"
+          style={{
+            background: C.surface,
+            border: `1px solid ${C.border}`,
+            borderRadius: "0.75rem",
+          }}
+        >
+          <Search className="w-10 h-10 mb-3" style={{ color: C.dim }} />
+          <p style={{ ...BODY, color: C.muted, fontSize: 14 }}>No observations found.</p>
+          <p style={{ ...BODY, color: C.dim, fontSize: 12, marginTop: 4 }}>Try adjusting your search or filters.</p>
         </div>
       ) : (
         <div className="grid gap-3">
-          {listData?.observations.map(obs => (
-            <Link key={obs.id} href={`/observations/${obs.id}`}>
-              <Card className="hover-elevate cursor-pointer transition-all border hover:border-primary/30">
-                <CardContent className="p-4 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex items-center justify-between sm:justify-start gap-3 w-full">
-                      <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+          {listData?.observations.map(obs => {
+            const pc = priorityConfig(obs.priority)
+            return (
+              <Link key={obs.id} href={`/observations/${obs.id}`}>
+                <div
+                  className="cursor-pointer"
+                  style={{
+                    background: C.surface,
+                    border: `1px solid ${C.border}`,
+                    borderLeft: `3px solid ${priorityBorderColor(obs.priority)}`,
+                    borderRadius: "0.75rem",
+                    padding: "14px 16px",
+                    transition: "border-color 0.15s, box-shadow 0.15s",
+                  }}
+                  onMouseEnter={e => {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.borderColor = C.muted
+                    el.style.borderLeftColor = priorityBorderColor(obs.priority)
+                    el.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)"
+                  }}
+                  onMouseLeave={e => {
+                    const el = e.currentTarget as HTMLDivElement
+                    el.style.borderColor = C.border
+                    el.style.borderLeftColor = priorityBorderColor(obs.priority)
+                    el.style.boxShadow = "none"
+                  }}
+                >
+                  <div className="flex flex-col gap-2">
+                    {/* Top row: ref + priority + status */}
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {/* Ref number */}
+                      <span
+                        style={{
+                          fontFamily: "monospace",
+                          fontSize: 11,
+                          color: C.muted,
+                          background: C.borderMid,
+                          borderRadius: "9999px",
+                          padding: "2px 8px",
+                        }}
+                      >
                         {obs.referenceNumber}
                       </span>
-                      <div className={`px-2 py-0.5 rounded-full text-xs font-semibold flex items-center gap-1 ${getPriorityColor(obs.priority)}`}>
+
+                      {/* Priority badge */}
+                      <span
+                        className="flex items-center gap-1"
+                        style={{
+                          background: pc.bg,
+                          color: pc.color,
+                          borderRadius: "9999px",
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          ...HEAD,
+                        }}
+                      >
                         <PriorityIcon p={obs.priority} />
-                        <span className="capitalize">{obs.priority}</span>
-                      </div>
-                      <Badge variant="outline" className={`ml-auto sm:ml-0 border-transparent ${getStatusColor(obs.status)}`}>
-                        {obs.status.replace('_', ' ')}
-                      </Badge>
-                    </div>
-                    
-                    <h3 className="font-semibold text-[15px]">{obs.title}</h3>
-                    
-                    <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1">
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: obs.categoryColour || '#ccc' }}></div>
-                        {obs.categoryName}
+                        {pc.label}
                       </span>
+
+                      {/* Status pill — right side */}
+                      <span
+                        className="ml-auto"
+                        style={{
+                          background: statusBg(obs.status),
+                          color: statusColor(obs.status),
+                          borderRadius: "9999px",
+                          padding: "2px 8px",
+                          fontSize: 11,
+                          fontWeight: 600,
+                          ...HEAD,
+                        }}
+                      >
+                        {statusLabel(obs.status)}
+                      </span>
+                    </div>
+
+                    {/* Title row */}
+                    <div className="flex items-start gap-2">
+                      <h3
+                        style={{
+                          ...BODY,
+                          color: C.text,
+                          fontWeight: 500,
+                          fontSize: 15,
+                          lineHeight: 1.4,
+                          flex: 1,
+                          margin: 0,
+                        }}
+                      >
+                        {obs.title}
+                      </h3>
+                      {/* Safety icon */}
+                      {obs.safetyIssue && (
+                        <ShieldAlert className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: C.urgent }} />
+                      )}
+                    </div>
+
+                    {/* Meta row */}
+                    <div className="flex flex-wrap items-center gap-3">
+                      {obs.categoryName && (
+                        <span className="flex items-center gap-1" style={{ ...BODY, color: C.muted, fontSize: 12 }}>
+                          <span
+                            className="inline-block w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: obs.categoryColour || C.dim }}
+                          />
+                          {obs.categoryName}
+                        </span>
+                      )}
                       {obs.namedLocationName && (
-                        <span className="flex items-center gap-1">
+                        <span className="flex items-center gap-1" style={{ ...BODY, color: C.muted, fontSize: 12 }}>
                           <MapPin className="w-3 h-3" /> {obs.namedLocationName}
                         </span>
                       )}
-                      <span>{formatShortDate(obs.observedAt)}</span>
+                      <span style={{ ...BODY, color: C.muted, fontSize: 12 }}>
+                        {formatShortDate(obs.observedAt)}
+                      </span>
+
+                      {/* Action count chip */}
+                      {obs.actionCount ? (
+                        <span
+                          style={{
+                            ...HEAD,
+                            background: C.emeraldTint,
+                            color: C.emerald,
+                            borderRadius: "9999px",
+                            padding: "2px 8px",
+                            fontSize: 11,
+                            fontWeight: 600,
+                          }}
+                        >
+                          {obs.actionCount} action{obs.actionCount !== 1 ? "s" : ""}
+                        </span>
+                      ) : null}
                     </div>
                   </div>
-                  
-                  {obs.actionCount ? (
-                    <div className="flex-shrink-0 bg-slate-50 border px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 self-end sm:self-auto">
-                      {obs.actionCount} action{obs.actionCount !== 1 && 's'}
-                    </div>
-                  ) : null}
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                </div>
+              </Link>
+            )
+          })}
         </div>
       )}
     </div>

@@ -13,7 +13,22 @@ delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
 
 import { useListCategories, useListLocations } from "@workspace/api-client-react"
-import { Filter, X, MapPin, Loader2, SlidersHorizontal } from "lucide-react"
+import { X, MapPin, SlidersHorizontal } from "lucide-react"
+
+const C = {
+  bg: "#0d1117",
+  surface: "#161b22",
+  border: "#30363d",
+  borderMid: "#21262d",
+  text: "#e6edf3",
+  muted: "#8b949e",
+  dim: "#484f58",
+  emerald: "#10b981",
+  emeraldDark: "#0d9268",
+}
+
+const HEAD = { fontFamily: "'Space Grotesk', sans-serif" }
+const BODY = { fontFamily: "'Inter', sans-serif" }
 
 type MapMarker = {
   id: number
@@ -38,10 +53,10 @@ type Filters = {
 }
 
 const PRIORITY_COLORS: Record<string, string> = {
-  urgent: '#dc2626',
-  high: '#ea580c',
-  normal: '#1e6091',
-  low: '#6b7280',
+  urgent: '#f85149',
+  high: '#d29922',
+  normal: '#58a6ff',
+  low: '#8b949e',
 }
 
 const PRIORITY_LABELS: Record<string, string> = {
@@ -72,7 +87,7 @@ const PRIORITY_OPTIONS = [
 ]
 
 function getPriorityBadgeHtml(priority: string): string {
-  const color = PRIORITY_COLORS[priority] || '#6b7280'
+  const color = PRIORITY_COLORS[priority] || '#8b949e'
   const label = PRIORITY_LABELS[priority] || priority
   return `<span style="display:inline-block;padding:2px 8px;background:${color}20;color:${color};border-radius:9999px;font-size:11px;font-weight:600;border:1px solid ${color}40">${label}</span>`
 }
@@ -99,6 +114,18 @@ const DEFAULT_FILTERS: Filters = {
   safetyIssue: false,
 }
 
+const selectStyle: React.CSSProperties = {
+  background: C.bg,
+  border: `1px solid ${C.border}`,
+  color: C.text,
+  borderRadius: "0.5rem",
+  padding: "0.4rem 0.75rem",
+  fontSize: 13,
+  width: "100%",
+  outline: "none",
+  ...BODY,
+}
+
 interface FilterPanelProps {
   filters: Filters
   onChange: (f: Filters) => void
@@ -111,102 +138,145 @@ interface FilterPanelProps {
 function FilterPanel({ filters, onChange, onClear, categories, locations, markerCount }: FilterPanelProps) {
   const active = hasActiveFilters(filters)
   return (
-    <div className="flex flex-col gap-4 p-4 h-full overflow-y-auto">
+    <div className="flex flex-col gap-4 p-4 h-full overflow-y-auto" style={{ background: C.surface }}>
+      {/* Panel header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <SlidersHorizontal className="h-4 w-4 text-muted-foreground" />
-          <span className="font-semibold text-sm">Filters</span>
+          <SlidersHorizontal className="h-4 w-4" style={{ color: C.muted }} />
+          <span style={{ ...HEAD, fontWeight: 600, fontSize: 13, color: C.text }}>Filters</span>
         </div>
         {active && (
           <button
             onClick={onClear}
-            className="text-xs text-destructive hover:underline flex items-center gap-1"
+            className="flex items-center gap-1 text-xs"
+            style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = C.text}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = C.muted}
           >
             <X className="h-3 w-3" /> Clear
           </button>
         )}
       </div>
 
-      <div className="text-xs text-muted-foreground bg-muted/50 rounded-md px-3 py-2 flex items-center gap-1.5">
-        <MapPin className="h-3.5 w-3.5" />
-        <span><strong>{markerCount}</strong> observation{markerCount !== 1 ? 's' : ''} on map</span>
+      {/* Marker count badge */}
+      <div
+        className="flex items-center gap-1.5 px-3 py-2 rounded-md"
+        style={{ background: C.borderMid, border: `1px solid ${C.border}` }}
+      >
+        <MapPin className="h-3.5 w-3.5" style={{ color: C.emerald }} />
+        <span style={{ ...BODY, fontSize: 12, color: C.muted }}>
+          <strong style={{ color: C.text }}>{markerCount}</strong> observation{markerCount !== 1 ? 's' : ''} on map
+        </span>
       </div>
 
+      {/* Status */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Status</label>
+        <label style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Status
+        </label>
         <select
           value={filters.status}
           onChange={e => onChange({ ...filters, status: e.target.value })}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          style={selectStyle}
+          onFocus={e => (e.target as HTMLSelectElement).style.borderColor = C.emerald}
+          onBlur={e => (e.target as HTMLSelectElement).style.borderColor = C.border}
         >
           {STATUS_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
+      {/* Priority */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Priority</label>
+        <label style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Priority
+        </label>
         <select
           value={filters.priority}
           onChange={e => onChange({ ...filters, priority: e.target.value })}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          style={selectStyle}
+          onFocus={e => (e.target as HTMLSelectElement).style.borderColor = C.emerald}
+          onBlur={e => (e.target as HTMLSelectElement).style.borderColor = C.border}
         >
           {PRIORITY_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
       </div>
 
+      {/* Category */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Category</label>
+        <label style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Category
+        </label>
         <select
           value={filters.categoryId}
           onChange={e => onChange({ ...filters, categoryId: e.target.value })}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          style={selectStyle}
+          onFocus={e => (e.target as HTMLSelectElement).style.borderColor = C.emerald}
+          onBlur={e => (e.target as HTMLSelectElement).style.borderColor = C.border}
         >
           <option value="">All categories</option>
           {categories.map(c => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
         </select>
       </div>
 
+      {/* Location */}
       <div className="space-y-1">
-        <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Location</label>
+        <label style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Location
+        </label>
         <select
           value={filters.namedLocationId}
           onChange={e => onChange({ ...filters, namedLocationId: e.target.value })}
-          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          style={selectStyle}
+          onFocus={e => (e.target as HTMLSelectElement).style.borderColor = C.emerald}
+          onBlur={e => (e.target as HTMLSelectElement).style.borderColor = C.border}
         >
           <option value="">All locations</option>
           {locations.map(l => <option key={l.id} value={String(l.id)}>{l.name}</option>)}
         </select>
       </div>
 
-      <div className="flex items-center justify-between py-2 border rounded-md px-3">
-        <label className="text-sm font-medium cursor-pointer" htmlFor="safety-toggle">Safety issues only</label>
+      {/* Safety toggle */}
+      <div
+        className="flex items-center justify-between py-2 px-3 rounded-md"
+        style={{ border: `1px solid ${C.border}` }}
+      >
+        <label
+          className="text-sm cursor-pointer"
+          style={{ ...BODY, fontSize: 13, color: C.text }}
+          htmlFor="safety-toggle"
+        >
+          Safety issues only
+        </label>
         <button
           id="safety-toggle"
           role="switch"
           aria-checked={filters.safetyIssue}
           onClick={() => onChange({ ...filters, safetyIssue: !filters.safetyIssue })}
-          className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-            filters.safetyIssue ? 'bg-destructive' : 'bg-muted-foreground/30'
-          }`}
+          className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
+          style={{ background: filters.safetyIssue ? "#f85149" : C.dim }}
         >
           <span
-            className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
-              filters.safetyIssue ? 'translate-x-4' : 'translate-x-0.5'
-            }`}
+            className="inline-block h-4 w-4 transform rounded-full shadow transition-transform"
+            style={{
+              background: "#fff",
+              transform: filters.safetyIssue ? "translateX(16px)" : "translateX(2px)",
+            }}
           />
         </button>
       </div>
 
       {/* Priority legend */}
-      <div className="border-t pt-3 space-y-2">
-        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Priority legend</p>
+      <div className="pt-3 space-y-2" style={{ borderTop: `1px solid ${C.borderMid}` }}>
+        <p style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Priority legend
+        </p>
         {Object.entries(PRIORITY_COLORS).map(([p, color]) => (
-          <div key={p} className="flex items-center gap-2 text-xs">
+          <div key={p} className="flex items-center gap-2">
             <span
-              className="inline-block w-3 h-3 rounded-full border border-white/50 shadow-sm flex-shrink-0"
-              style={{ backgroundColor: color }}
+              className="inline-block w-3 h-3 rounded-full flex-shrink-0"
+              style={{ backgroundColor: color, border: "1px solid rgba(255,255,255,0.15)" }}
             />
-            <span className="capitalize text-muted-foreground">{p}</span>
+            <span className="capitalize" style={{ ...BODY, fontSize: 12, color: C.muted }}>{p}</span>
           </div>
         ))}
       </div>
@@ -252,14 +322,11 @@ export default function MapView() {
     mapRef.current = map
     clusterGroupRef.current = clusterGroup
 
-    // Try to show user location
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const { latitude, longitude } = pos.coords
-          if (userMarkerRef.current) {
-            userMarkerRef.current.remove()
-          }
+          if (userMarkerRef.current) userMarkerRef.current.remove()
           const dot = L.circleMarker([latitude, longitude], {
             radius: 8,
             fillColor: '#3b82f6',
@@ -272,9 +339,7 @@ export default function MapView() {
             .addTo(map)
           userMarkerRef.current = dot
         },
-        () => {
-          // Permission denied or unavailable — silently ignore
-        }
+        () => { /* silently ignore */ }
       )
     }
 
@@ -285,7 +350,6 @@ export default function MapView() {
     }
   }, [])
 
-  // Fetch markers when filters change
   const fetchMarkers = useCallback(async () => {
     setLoading(true)
     try {
@@ -306,15 +370,12 @@ export default function MapView() {
     fetchMarkers()
   }, [fetchMarkers])
 
-  // Rebuild markers on map when markers data changes
   useEffect(() => {
     const group = clusterGroupRef.current
     if (!group) return
-
     group.clearLayers()
-
     markers.forEach((m) => {
-      const color = PRIORITY_COLORS[m.priority] || '#6b7280'
+      const color = PRIORITY_COLORS[m.priority] || '#8b949e'
       const circle = L.circleMarker([m.latitude, m.longitude], {
         radius: 8,
         fillColor: color,
@@ -323,17 +384,15 @@ export default function MapView() {
         opacity: 1,
         fillOpacity: 0.85,
       })
-
       const popupHtml = `
-        <div style="min-width:200px;padding:4px">
-          <div style="font-weight:600;margin-bottom:4px;font-size:14px">${escapeHtml(m.title)}</div>
-          <div style="font-size:12px;color:#666;margin-bottom:8px">${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.status.replace('_', ' '))}</div>
+        <div style="min-width:200px;padding:4px;font-family:'Inter',sans-serif">
+          <div style="font-weight:600;margin-bottom:4px;font-size:14px;color:#e6edf3">${escapeHtml(m.title)}</div>
+          <div style="font-size:12px;color:#8b949e;margin-bottom:8px">${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.status.replace('_', ' '))}</div>
           <div style="margin-bottom:8px">${getPriorityBadgeHtml(m.priority)}${m.safetyIssue ? ' <span style="font-size:13px">⚠️ Safety</span>' : ''}</div>
-          ${m.namedLocationName ? `<div style="font-size:12px;color:#666;margin-bottom:8px">📍 ${escapeHtml(m.namedLocationName)}</div>` : ''}
-          <a href="/observations/${m.id}" style="display:inline-block;padding:4px 12px;background:#1e4a2e;color:white;border-radius:6px;font-size:13px;text-decoration:none">View observation</a>
+          ${m.namedLocationName ? `<div style="font-size:12px;color:#8b949e;margin-bottom:8px">📍 ${escapeHtml(m.namedLocationName)}</div>` : ''}
+          <a href="/observations/${m.id}" style="display:inline-block;padding:4px 12px;background:#10b981;color:white;border-radius:6px;font-size:13px;text-decoration:none;font-family:'Space Grotesk',sans-serif">View observation</a>
         </div>
       `
-
       circle.bindPopup(L.popup({ maxWidth: 300 }).setContent(popupHtml))
       group.addLayer(circle)
     })
@@ -356,25 +415,49 @@ export default function MapView() {
   return (
     <div className="flex h-full w-full" style={{ height: 'calc(100dvh - 60px)' }}>
       {/* Desktop sidebar */}
-      <aside className="hidden md:flex flex-col w-[280px] flex-shrink-0 border-r bg-background">
+      <aside
+        className="hidden md:flex flex-col w-[280px] flex-shrink-0"
+        style={{ borderRight: `1px solid ${C.border}`, background: C.surface }}
+      >
         {filterPanel}
       </aside>
 
       {/* Map area */}
       <div className="relative flex-1 flex flex-col">
         {/* Top bar */}
-        <div className="flex items-center justify-between px-3 py-2 bg-background border-b z-10 flex-shrink-0">
+        <div
+          className="flex items-center justify-between px-3 py-2 z-10 flex-shrink-0"
+          style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}
+        >
           <div className="flex items-center gap-2">
             {loading ? (
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <div className="flex gap-1">
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="animate-bounce w-1.5 h-1.5 rounded-full"
+                    style={{ backgroundColor: C.emerald, animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
             ) : (
-              <MapPin className="h-4 w-4 text-primary" />
+              <MapPin className="h-4 w-4" style={{ color: C.emerald }} />
             )}
-            <span className="text-sm font-medium">
+            <span style={{ ...HEAD, fontSize: 13, fontWeight: 500, color: C.text }}>
               {loading ? 'Loading…' : `${markers.length} observation${markers.length !== 1 ? 's' : ''}`}
             </span>
             {active && !loading && (
-              <span className="text-xs bg-primary/10 text-primary rounded-full px-2 py-0.5 font-medium">
+              <span
+                style={{
+                  ...HEAD,
+                  fontSize: 11,
+                  fontWeight: 600,
+                  background: "rgba(16,185,129,0.12)",
+                  color: C.emerald,
+                  borderRadius: 9999,
+                  padding: "1px 8px",
+                }}
+              >
                 Filtered
               </span>
             )}
@@ -383,7 +466,10 @@ export default function MapView() {
             {active && (
               <button
                 onClick={handleClearFilters}
-                className="text-xs text-muted-foreground hover:text-destructive flex items-center gap-1 hidden md:flex"
+                className="hidden md:flex items-center gap-1 text-xs"
+                style={{ color: C.muted, background: "none", border: "none", cursor: "pointer" }}
+                onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.color = C.text}
+                onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.color = C.muted}
               >
                 <X className="h-3 w-3" /> Clear filters
               </button>
@@ -391,11 +477,24 @@ export default function MapView() {
             {/* Mobile filter button */}
             <button
               onClick={() => setDrawerOpen(true)}
-              className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-md border bg-background text-sm font-medium shadow-sm hover:bg-muted/50"
+              className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm"
+              style={{
+                ...HEAD,
+                fontWeight: 500,
+                background: "transparent",
+                border: `1px solid ${C.border}`,
+                color: C.text,
+                cursor: "pointer",
+              }}
             >
-              <Filter className="h-4 w-4" />
+              <SlidersHorizontal className="h-4 w-4" />
               Filters
-              {active && <span className="w-2 h-2 rounded-full bg-primary inline-block" />}
+              {active && (
+                <span
+                  className="w-2 h-2 rounded-full inline-block"
+                  style={{ background: C.emerald }}
+                />
+              )}
             </button>
           </div>
         </div>
@@ -404,16 +503,40 @@ export default function MapView() {
         <div className="relative flex-1">
           <div ref={mapContainerRef} className="absolute inset-0" />
 
+          {/* Loading overlay */}
+          {loading && (
+            <div
+              className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none"
+              style={{ background: "rgba(13,17,23,0.5)" }}
+            >
+              <div className="flex gap-1.5">
+                {[0, 1, 2].map(i => (
+                  <div
+                    key={i}
+                    className="animate-bounce w-2.5 h-2.5 rounded-full"
+                    style={{ backgroundColor: C.emerald, animationDelay: `${i * 0.15}s` }}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Empty state overlay */}
           {!loading && markers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
-              <div className="bg-background/90 backdrop-blur-sm rounded-xl border shadow-lg px-6 py-5 text-center max-w-xs pointer-events-auto">
-                <MapPin className="h-8 w-8 text-muted-foreground mx-auto mb-2" />
-                <p className="text-sm font-medium text-foreground">No observations with coordinates found</p>
+              <div
+                className="backdrop-blur-sm rounded-xl px-6 py-5 text-center max-w-xs pointer-events-auto"
+                style={{ background: "rgba(22,27,34,0.92)", border: `1px solid ${C.border}` }}
+              >
+                <MapPin className="h-8 w-8 mx-auto mb-2" style={{ color: C.dim }} />
+                <p style={{ ...HEAD, fontSize: 14, fontWeight: 500, color: C.muted }}>
+                  No observations with coordinates found
+                </p>
                 {active && (
                   <button
                     onClick={handleClearFilters}
-                    className="mt-3 text-xs text-primary hover:underline"
+                    className="mt-3 text-xs"
+                    style={{ color: C.emerald, background: "none", border: "none", cursor: "pointer" }}
                   >
                     Clear filters
                   </button>
@@ -424,21 +547,27 @@ export default function MapView() {
         </div>
       </div>
 
-      {/* Mobile filter drawer overlay */}
+      {/* Mobile filter drawer */}
       {drawerOpen && (
         <div className="fixed inset-0 z-50 md:hidden">
-          {/* Backdrop */}
           <div
-            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            className="absolute inset-0 backdrop-blur-sm"
+            style={{ background: "rgba(0,0,0,0.6)" }}
             onClick={() => setDrawerOpen(false)}
           />
-          {/* Drawer */}
-          <div className="absolute bottom-0 left-0 right-0 bg-background rounded-t-2xl shadow-xl max-h-[80dvh] flex flex-col">
-            <div className="flex items-center justify-between px-4 pt-4 pb-2 border-b">
-              <span className="font-semibold">Filter Map</span>
+          <div
+            className="absolute bottom-0 left-0 right-0 rounded-t-2xl max-h-[80dvh] flex flex-col"
+            style={{ background: C.surface, border: `1px solid ${C.border}` }}
+          >
+            <div
+              className="flex items-center justify-between px-4 pt-4 pb-2"
+              style={{ borderBottom: `1px solid ${C.border}` }}
+            >
+              <span style={{ ...HEAD, fontWeight: 600, fontSize: 14, color: C.text }}>Filter Map</span>
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="p-1 rounded-md hover:bg-muted"
+                className="p-1 rounded-md"
+                style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer" }}
               >
                 <X className="h-5 w-5" />
               </button>
@@ -446,10 +575,11 @@ export default function MapView() {
             <div className="flex-1 overflow-y-auto">
               {filterPanel}
             </div>
-            <div className="p-4 border-t">
+            <div className="p-4" style={{ borderTop: `1px solid ${C.border}` }}>
               <button
                 onClick={() => setDrawerOpen(false)}
-                className="w-full py-2.5 bg-primary text-primary-foreground rounded-lg font-medium text-sm"
+                className="w-full py-2.5 rounded-lg text-sm font-medium"
+                style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD, cursor: "pointer" }}
               >
                 Apply Filters
               </button>

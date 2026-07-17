@@ -1,11 +1,7 @@
 import React, { useState, useEffect, useRef } from "react"
 import { useCreateObservation, useListCategories, useListLocations } from "@workspace/api-client-react"
 import { useLocation } from "wouter"
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { ChevronRight, ChevronLeft, MapPin, Camera, Save, Check } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
 import PhotoUpload from "@/components/PhotoUpload"
 import PhotoGallery from "@/components/PhotoGallery"
 import { MapContainer, TileLayer, Marker } from "react-leaflet"
@@ -20,12 +16,77 @@ L.Icon.Default.mergeOptions({
   shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
 })
 
+const C = {
+  bg: "#0d1117",
+  surface: "#161b22",
+  border: "#30363d",
+  borderMid: "#21262d",
+  text: "#e6edf3",
+  muted: "#8b949e",
+  dim: "#484f58",
+  emerald: "#10b981",
+  emeraldDark: "#0d9268",
+  emeraldDim: "#065f46",
+  emeraldTint: "rgba(16,185,129,0.08)",
+  urgent: "#f85149",
+  urgentTint: "rgba(248,81,73,0.12)",
+  high: "#d29922",
+  highTint: "rgba(210,153,34,0.12)",
+  blue: "#58a6ff",
+  blueTint: "rgba(88,166,255,0.12)",
+  purple: "#a78bfa",
+}
+
+const HEAD = { fontFamily: "'Space Grotesk', sans-serif" }
+const BODY = { fontFamily: "'Inter', sans-serif" }
+
+function priorityConfig(p: string) {
+  switch (p) {
+    case "urgent": return { color: "#f85149", bg: "rgba(248,81,73,0.12)", label: "Urgent" }
+    case "high":   return { color: "#d29922", bg: "rgba(210,153,34,0.12)", label: "High" }
+    case "normal": return { color: "#58a6ff", bg: "rgba(88,166,255,0.12)", label: "Normal" }
+    default:       return { color: "#8b949e", bg: "rgba(139,148,158,0.12)", label: "Low" }
+  }
+}
+
+function priorityBorderColor(p: string) {
+  switch (p) {
+    case "urgent": return "#f85149"
+    case "high":   return "#d29922"
+    case "normal": return "#58a6ff"
+    default:       return "#8b949e"
+  }
+}
+
 interface PendingPhoto {
   storageKey: string
   originalFilename: string
   mimeType: string
   fileSize: number
 }
+
+const inputStyle: React.CSSProperties = {
+  background: C.bg,
+  border: `1px solid ${C.border}`,
+  color: C.text,
+  borderRadius: "0.625rem",
+  padding: "0.625rem 0.75rem",
+  fontSize: 14,
+  width: "100%",
+  outline: "none",
+  ...BODY,
+}
+
+const labelStyle: React.CSSProperties = {
+  ...HEAD,
+  fontSize: 13,
+  fontWeight: 600,
+  color: C.muted,
+  display: "block",
+  marginBottom: 6,
+}
+
+const STEP_LABELS = ["Location", "Category", "Details", "Photos", "Review"]
 
 export default function ObservationNew() {
   const [, setLocation] = useLocation()
@@ -93,7 +154,6 @@ export default function ObservationNew() {
       },
       {
         onSuccess: async (data) => {
-          // Upload any pending photos
           for (const photo of (pendingPhotos || [])) {
             await fetch(`/api/observations/${data.id}/images`, {
               method: 'POST',
@@ -112,7 +172,6 @@ export default function ObservationNew() {
     return true
   }
 
-  // Build fake gallery items from pending photos for preview
   const pendingGalleryItems = (pendingPhotos || []).map((p, i) => ({
     id: i,
     storageKey: p.storageKey,
@@ -121,40 +180,114 @@ export default function ObservationNew() {
     caption: null,
   }))
 
+  const [gpsBtnHover, setGpsBtnHover] = useState(false)
+  const [nextBtnHover, setNextBtnHover] = useState(false)
+  const [submitBtnHover, setSubmitBtnHover] = useState(false)
+  const [draftBtnHover, setDraftBtnHover] = useState(false)
+
   return (
-    <div className="max-w-xl mx-auto space-y-4">
-      <div className="flex items-center gap-2 text-sm font-medium text-muted-foreground mb-6">
-        <span className={step >= 1 ? "text-primary" : ""}>Location</span> <ChevronRight className="w-4 h-4" />
-        <span className={step >= 2 ? "text-primary" : ""}>Category</span> <ChevronRight className="w-4 h-4" />
-        <span className={step >= 3 ? "text-primary" : ""}>Details</span> <ChevronRight className="w-4 h-4" />
-        <span className={step >= 4 ? "text-primary" : ""}>Photos</span> <ChevronRight className="w-4 h-4" />
-        <span className={step >= 5 ? "text-primary" : ""}>Review</span>
+    <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 0 40px" }}>
+      {/* Page Header */}
+      <div style={{ marginBottom: 24 }}>
+        <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text, margin: 0 }}>New Observation</h1>
+        <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 4 }}>Record a field observation across the estate</p>
       </div>
 
-      <Card className="border shadow-lg">
+      {/* Step Indicator */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 24 }}>
+        {STEP_LABELS.map((label, i) => {
+          const n = i + 1
+          const completed = step > n
+          const current = step === n
+          return (
+            <React.Fragment key={n}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{
+                  width: 24,
+                  height: 24,
+                  borderRadius: "50%",
+                  background: completed ? C.emerald : current ? "transparent" : C.dim,
+                  border: current ? `2px solid ${C.emerald}` : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  transition: "all 0.2s",
+                }}>
+                  {completed
+                    ? <Check size={13} color="#fff" strokeWidth={3} />
+                    : <span style={{ ...HEAD, fontSize: 11, fontWeight: 700, color: current ? C.emerald : "#fff" }}>{n}</span>
+                  }
+                </div>
+                <span style={{
+                  ...HEAD,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: current ? C.text : completed ? C.emerald : C.dim,
+                  display: "none",
+                  ...(current || completed ? { display: "inline" } : {}),
+                }}>
+                  {label}
+                </span>
+              </div>
+              {i < STEP_LABELS.length - 1 && (
+                <div style={{ flex: 1, height: 1, background: step > n ? C.emerald : C.borderMid, transition: "background 0.3s" }} />
+              )}
+            </React.Fragment>
+          )
+        })}
+        <span style={{ ...BODY, fontSize: 12, color: C.muted, marginLeft: 8, whiteSpace: "nowrap" }}>
+          Step {step} of 5
+        </span>
+      </div>
+
+      {/* Step Panel */}
+      <div style={{
+        background: C.surface,
+        border: `1px solid ${C.border}`,
+        borderRadius: "0.75rem",
+        padding: "1.5rem",
+        marginBottom: 16,
+      }}>
+        {/* STEP 1: Location */}
         {step === 1 && (
-          <div className="animate-in slide-in-from-right-4">
-            <CardHeader>
-              <CardTitle>Where are you?</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <Button 
-                variant="outline" 
-                className="w-full h-16 flex items-center justify-center gap-3 text-lg border-primary/20 hover:bg-primary/5 hover:border-primary"
+          <div>
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px" }}>
+              Where are you?
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <button
                 onClick={handleGetLocation}
+                onMouseEnter={() => setGpsBtnHover(true)}
+                onMouseLeave={() => setGpsBtnHover(false)}
+                style={{
+                  width: "100%",
+                  height: 64,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 10,
+                  background: formData.latitude ? C.emeraldTint : gpsBtnHover ? C.borderMid : "transparent",
+                  border: `1px solid ${formData.latitude ? C.emerald : C.border}`,
+                  borderRadius: "0.625rem",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
               >
-                <MapPin className="w-5 h-5 text-primary" />
-                {formData.latitude ? "GPS Location Captured" : "Capture GPS Location"}
-                {formData.latitude && <Check className="w-5 h-5 text-green-600 ml-auto" />}
-              </Button>
+                <MapPin size={20} color={formData.latitude ? C.emerald : C.muted} />
+                <span style={{ ...HEAD, fontSize: 15, fontWeight: 600, color: formData.latitude ? C.emerald : C.text }}>
+                  {formData.latitude ? "GPS Location Captured" : "Capture GPS Location"}
+                </span>
+                {formData.latitude && <Check size={18} color={C.emerald} style={{ marginLeft: "auto" }} />}
+              </button>
 
               {formData.latitude && formData.longitude && (
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground">
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <p style={{ ...BODY, fontSize: 12, color: C.muted, margin: 0 }}>
                     GPS captured: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
                     {formData.gpsAccuracy != null && ` (±${Math.round(formData.gpsAccuracy)}m)`}
                   </p>
-                  <div className="rounded-md overflow-hidden border h-[150px]">
+                  <div style={{ borderRadius: "0.5rem", overflow: "hidden", border: `1px solid ${C.border}`, height: 150 }}>
                     <MapContainer
                       center={[formData.latitude, formData.longitude]}
                       zoom={16}
@@ -171,208 +304,465 @@ export default function ObservationNew() {
                   </div>
                 </div>
               )}
-              
-              <div className="relative">
-                <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
-                <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">Or select location</span></div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                <div style={{ flex: 1, height: 1, background: C.borderMid }} />
+                <span style={{ ...BODY, fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>Or select location</span>
+                <div style={{ flex: 1, height: 1, background: C.borderMid }} />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Named Location (optional)</label>
-                <select 
-                  className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+              <div>
+                <label style={labelStyle}>Named Location <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                <select
+                  style={{ ...inputStyle }}
                   value={formData.namedLocationId}
                   onChange={e => setFormData(d => ({ ...d, namedLocationId: e.target.value }))}
                 >
-                  <option value="">-- Select location --</option>
-                  {locations?.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                  <option value="" style={{ background: C.bg, color: C.dim }}>-- Select location --</option>
+                  {locations?.map(l => <option key={l.id} value={l.id} style={{ background: C.bg, color: C.text }}>{l.name}</option>)}
                 </select>
               </div>
-            </CardContent>
+            </div>
           </div>
         )}
 
+        {/* STEP 2: Category */}
         {step === 2 && (
-          <div className="animate-in slide-in-from-right-4">
-            <CardHeader>
-              <CardTitle>What are you reporting?</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Category <span className="text-red-500">*</span></label>
-                <div className="grid grid-cols-2 gap-3">
-                  {categories?.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => setFormData(d => ({ ...d, categoryId: String(c.id) }))}
-                      className={`p-3 text-left border rounded-lg text-sm transition-all ${formData.categoryId === String(c.id) ? 'border-primary ring-1 ring-primary bg-primary/5 font-medium' : 'hover:bg-muted'}`}
-                    >
-                      <div className="w-3 h-3 rounded-full mb-2" style={{ backgroundColor: c.displayColour || '#ccc' }}></div>
-                      {c.name}
-                    </button>
-                  ))}
+          <div>
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px" }}>
+              What are you reporting?
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <label style={labelStyle}>Category <span style={{ color: C.urgent }}>*</span></label>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  {categories?.map(c => {
+                    const selected = formData.categoryId === String(c.id)
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => setFormData(d => ({ ...d, categoryId: String(c.id) }))}
+                        style={{
+                          padding: "12px",
+                          textAlign: "left",
+                          background: selected ? C.emeraldTint : C.bg,
+                          border: `1px solid ${selected ? C.emerald : C.border}`,
+                          borderRadius: "0.625rem",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                        }}
+                      >
+                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                          <div style={{
+                            width: 10,
+                            height: 10,
+                            borderRadius: "50%",
+                            background: c.displayColour || C.dim,
+                            flexShrink: 0,
+                          }} />
+                          <span style={{ ...BODY, fontSize: 13, color: selected ? C.emerald : C.text, fontWeight: selected ? 600 : 400 }}>
+                            {c.name}
+                          </span>
+                          {selected && <Check size={14} color={C.emerald} style={{ marginLeft: "auto" }} />}
+                        </div>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Brief Title <span className="text-red-500">*</span></label>
-                <Input 
-                  placeholder="e.g. Fallen branch on Main Drive" 
+              <div>
+                <label style={labelStyle}>Brief Title <span style={{ color: C.urgent }}>*</span></label>
+                <input
+                  style={inputStyle}
+                  placeholder="e.g. Fallen branch on Main Drive"
                   value={formData.title}
                   onChange={e => setFormData(d => ({ ...d, title: e.target.value }))}
                   maxLength={100}
+                  onFocus={e => (e.target.style.borderColor = C.emerald)}
+                  onBlur={e => (e.target.style.borderColor = C.border)}
                 />
               </div>
-            </CardContent>
+            </div>
           </div>
         )}
 
+        {/* STEP 3: Details */}
         {step === 3 && (
-          <div className="animate-in slide-in-from-right-4">
-            <CardHeader>
-              <CardTitle>Details</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Description</label>
-                <textarea 
-                  className="flex w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[100px]"
+          <div>
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px" }}>
+              Details
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div>
+                <label style={labelStyle}>Description</label>
+                <textarea
+                  style={{ ...inputStyle, minHeight: 100, resize: "vertical" }}
                   placeholder="Additional context or details..."
                   value={formData.description}
                   onChange={e => setFormData(d => ({ ...d, description: e.target.value }))}
+                  onFocus={e => (e.target.style.borderColor = C.emerald)}
+                  onBlur={e => (e.target.style.borderColor = C.border)}
                 />
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium">Priority</label>
-                <div className="flex gap-2">
-                  {['low', 'normal', 'high', 'urgent'].map(p => (
-                    <button
-                      key={p}
-                      onClick={() => setFormData(d => ({ ...d, priority: p as any }))}
-                      className={`flex-1 py-2 text-xs font-medium uppercase rounded border ${formData.priority === p ? 'bg-primary text-primary-foreground border-primary' : 'bg-background hover:bg-muted'}`}
-                    >
-                      {p}
-                    </button>
-                  ))}
+              <div>
+                <label style={labelStyle}>Priority</label>
+                <div style={{ display: "flex", gap: 8 }}>
+                  {(['low', 'normal', 'high', 'urgent'] as const).map(p => {
+                    const cfg = priorityConfig(p)
+                    const selected = formData.priority === p
+                    return (
+                      <button
+                        key={p}
+                        onClick={() => setFormData(d => ({ ...d, priority: p as any }))}
+                        style={{
+                          flex: 1,
+                          padding: "8px 4px",
+                          background: selected ? cfg.bg : "transparent",
+                          border: `1px solid ${selected ? cfg.color : C.border}`,
+                          borderRadius: "0.625rem",
+                          cursor: "pointer",
+                          transition: "all 0.15s",
+                          ...HEAD,
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: selected ? cfg.color : C.dim,
+                          textTransform: "uppercase",
+                          letterSpacing: "0.06em",
+                        }}
+                      >
+                        {cfg.label}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
 
-              <div className="space-y-4 pt-2">
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                 {[
-                  { id: 'safetyIssue', label: 'Safety Issue' },
-                  { id: 'publicAccessAffected', label: 'Public Access Affected' },
-                  { id: 'machineryRequired', label: 'Machinery Required' },
-                  { id: 'followUpRequired', label: 'Follow-up Required' }
-                ].map(flag => (
-                  <label key={flag.id} className="flex items-center gap-3">
-                    <input 
-                      type="checkbox" 
-                      className="w-5 h-5 rounded text-primary focus:ring-primary border-input"
-                      checked={formData[flag.id as keyof typeof formData] as boolean}
-                      onChange={e => setFormData(d => ({ ...d, [flag.id]: e.target.checked }))}
-                    />
-                    <span className="text-sm">{flag.label}</span>
-                  </label>
-                ))}
+                  { id: 'safetyIssue', label: 'Safety Issue', desc: 'Poses a risk to people or property' },
+                  { id: 'publicAccessAffected', label: 'Public Access Affected', desc: 'Path, gate or entrance is blocked' },
+                  { id: 'machineryRequired', label: 'Machinery Required', desc: 'Needs tractor, chainsaw or heavy equipment' },
+                  { id: 'followUpRequired', label: 'Follow-up Required', desc: 'Needs a return visit or action' }
+                ].map(flag => {
+                  const checked = formData[flag.id as keyof typeof formData] as boolean
+                  return (
+                    <button
+                      key={flag.id}
+                      type="button"
+                      onClick={() => setFormData(d => ({ ...d, [flag.id]: !d[flag.id as keyof typeof d] }))}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: 12,
+                        background: checked ? C.emeraldTint : C.bg,
+                        border: `1px solid ${checked ? C.emerald : C.border}`,
+                        borderRadius: "0.625rem",
+                        padding: "10px 14px",
+                        cursor: "pointer",
+                        textAlign: "left",
+                        transition: "all 0.15s",
+                        width: "100%",
+                      }}
+                    >
+                      {/* Toggle pill */}
+                      <div style={{
+                        width: 36,
+                        height: 20,
+                        borderRadius: 9999,
+                        background: checked ? C.emerald : C.dim,
+                        display: "flex",
+                        alignItems: "center",
+                        padding: "0 3px",
+                        transition: "background 0.2s",
+                        flexShrink: 0,
+                        justifyContent: checked ? "flex-end" : "flex-start",
+                      }}>
+                        <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#fff" }} />
+                      </div>
+                      <div>
+                        <div style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: checked ? C.emerald : C.text }}>{flag.label}</div>
+                        <div style={{ ...BODY, fontSize: 12, color: C.muted, marginTop: 2 }}>{flag.desc}</div>
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-            </CardContent>
+            </div>
           </div>
         )}
 
+        {/* STEP 4: Photos */}
         {step === 4 && (
-          <div className="animate-in slide-in-from-right-4">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Camera className="w-5 h-5" />
-                Photographs
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <div>
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px", display: "flex", alignItems: "center", gap: 8 }}>
+              <Camera size={18} color={C.muted} /> Photographs
+            </h2>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <PhotoUpload
                 onUploaded={handlePhotoUploaded}
                 label="Take / Add Photo"
               />
 
               {(pendingPhotos && pendingPhotos.length > 0) ? (
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">
+                <div>
+                  <p style={{ ...BODY, fontSize: 13, color: C.muted, marginBottom: 10 }}>
                     {pendingPhotos.length} photo{pendingPhotos.length !== 1 ? "s" : ""} ready to upload
                   </p>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8 }}>
                     {pendingPhotos.map((p, i) => (
-                      <div key={i} className="relative rounded-md overflow-hidden border bg-muted aspect-square">
+                      <div key={i} style={{ position: "relative", borderRadius: "0.5rem", overflow: "hidden", border: `1px solid ${C.border}`, background: C.bg, aspectRatio: "1" }}>
                         <img
                           src={`/api/storage${p.storageKey}`}
                           alt={p.originalFilename}
-                          className="w-full h-full object-cover"
+                          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                         />
                         <button
                           type="button"
                           onClick={() => setPendingPhotos(prev => (prev || []).filter((_, idx) => idx !== i))}
-                          className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-0.5"
+                          style={{
+                            position: "absolute",
+                            top: 4,
+                            right: 4,
+                            background: "rgba(0,0,0,0.7)",
+                            border: "none",
+                            borderRadius: "50%",
+                            padding: 3,
+                            cursor: "pointer",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
                         >
-                          <svg xmlns="http://www.w3.org/2000/svg" className="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth="2.5"><path d="M18 6 6 18M6 6l12 12"/></svg>
                         </button>
                       </div>
                     ))}
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-muted-foreground text-center py-4">No photos added yet. Photos are optional.</p>
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <Camera size={32} color={C.dim} style={{ margin: "0 auto 8px" }} />
+                  <p style={{ ...BODY, fontSize: 13, color: C.muted, margin: 0 }}>No photos added yet</p>
+                  <p style={{ ...BODY, fontSize: 12, color: C.dim, marginTop: 4 }}>Photos are optional but helpful for records</p>
+                </div>
               )}
-            </CardContent>
+            </div>
           </div>
         )}
 
+        {/* STEP 5: Review */}
         {step === 5 && (
-          <div className="animate-in slide-in-from-right-4">
-            <CardHeader>
-              <CardTitle>Review</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-muted p-4 rounded-lg space-y-3 text-sm">
-                <div><span className="text-muted-foreground">Title:</span> <span className="font-medium">{formData.title}</span></div>
-                <div><span className="text-muted-foreground">Priority:</span> <span className="font-medium uppercase">{formData.priority}</span></div>
-                {formData.description && <div><span className="text-muted-foreground">Desc:</span> {formData.description}</div>}
-                {(pendingPhotos && pendingPhotos.length > 0) && (
-                  <div><span className="text-muted-foreground">Photos:</span> <span className="font-medium">{pendingPhotos.length} photo{pendingPhotos.length !== 1 ? "s" : ""} queued</span></div>
-                )}
-                <div className="flex gap-2 flex-wrap mt-2">
-                  {formData.safetyIssue && <Badge variant="destructive">Safety Issue</Badge>}
-                  {formData.publicAccessAffected && <Badge variant="secondary" className="bg-orange-100 text-orange-800 hover:bg-orange-100">Access Blocked</Badge>}
-                  {formData.machineryRequired && <Badge variant="outline">Machinery</Badge>}
+          <div>
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px" }}>
+              Review &amp; Submit
+            </h2>
+            <div style={{
+              background: C.bg,
+              border: `1px solid ${C.border}`,
+              borderRadius: "0.625rem",
+              padding: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: 12,
+              marginBottom: 20,
+            }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ ...BODY, fontSize: 11, color: C.muted, marginBottom: 2 }}>Title</div>
+                  <div style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: C.text }}>{formData.title || <span style={{ color: C.dim }}>—</span>}</div>
                 </div>
+                {formData.priority && (() => {
+                  const cfg = priorityConfig(formData.priority)
+                  return (
+                    <div style={{
+                      background: cfg.bg,
+                      color: cfg.color,
+                      borderRadius: 9999,
+                      padding: "2px 10px",
+                      fontSize: 11,
+                      fontWeight: 700,
+                      ...HEAD,
+                      textTransform: "uppercase",
+                      letterSpacing: "0.05em",
+                    }}>{cfg.label}</div>
+                  )
+                })()}
               </div>
-            </CardContent>
-            <CardFooter className="flex-col gap-3">
-              <Button 
-                className="w-full h-12 text-base" 
+
+              {formData.description && (
+                <div>
+                  <div style={{ ...BODY, fontSize: 11, color: C.muted, marginBottom: 2 }}>Description</div>
+                  <div style={{ ...BODY, fontSize: 13, color: C.text }}>{formData.description}</div>
+                </div>
+              )}
+
+              {(formData.latitude || formData.namedLocationId) && (
+                <div>
+                  <div style={{ ...BODY, fontSize: 11, color: C.muted, marginBottom: 2 }}>Location</div>
+                  <div style={{ ...BODY, fontSize: 13, color: C.text }}>
+                    {formData.latitude
+                      ? `GPS: ${formData.latitude.toFixed(5)}, ${formData.longitude?.toFixed(5)}`
+                      : locations?.find(l => String(l.id) === formData.namedLocationId)?.name}
+                  </div>
+                </div>
+              )}
+
+              {(pendingPhotos && pendingPhotos.length > 0) && (
+                <div>
+                  <div style={{ ...BODY, fontSize: 11, color: C.muted, marginBottom: 2 }}>Photos</div>
+                  <div style={{ ...BODY, fontSize: 13, color: C.text }}>{pendingPhotos.length} photo{pendingPhotos.length !== 1 ? "s" : ""} queued</div>
+                </div>
+              )}
+
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 4 }}>
+                {formData.safetyIssue && (
+                  <span style={{
+                    background: "rgba(248,81,73,0.12)", color: "#f85149", borderRadius: 9999,
+                    padding: "2px 10px", fontSize: 11, fontWeight: 600, ...HEAD,
+                  }}>Safety Issue</span>
+                )}
+                {formData.publicAccessAffected && (
+                  <span style={{
+                    background: "rgba(210,153,34,0.12)", color: "#d29922", borderRadius: 9999,
+                    padding: "2px 10px", fontSize: 11, fontWeight: 600, ...HEAD,
+                  }}>Access Blocked</span>
+                )}
+                {formData.machineryRequired && (
+                  <span style={{
+                    background: C.borderMid, color: C.muted, borderRadius: 9999,
+                    padding: "2px 10px", fontSize: 11, fontWeight: 600, ...HEAD,
+                  }}>Machinery</span>
+                )}
+                {formData.followUpRequired && (
+                  <span style={{
+                    background: C.emeraldTint, color: C.emerald, borderRadius: 9999,
+                    padding: "2px 10px", fontSize: 11, fontWeight: 600, ...HEAD,
+                  }}>Follow-up</span>
+                )}
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              <button
                 onClick={() => handleSubmit('submitted')}
                 disabled={createObservation.isPending}
+                onMouseEnter={() => setSubmitBtnHover(true)}
+                onMouseLeave={() => setSubmitBtnHover(false)}
+                style={{
+                  width: "100%",
+                  height: 48,
+                  background: createObservation.isPending ? C.emeraldDim : submitBtnHover ? C.emeraldDark : C.emerald,
+                  border: "none",
+                  borderRadius: "0.625rem",
+                  color: "#fff",
+                  ...HEAD,
+                  fontSize: 15,
+                  fontWeight: 700,
+                  cursor: createObservation.isPending ? "not-allowed" : "pointer",
+                  transition: "background 0.15s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                }}
               >
-                Submit Observation
-              </Button>
-              <Button 
-                variant="outline" 
-                className="w-full h-12" 
+                {createObservation.isPending ? (
+                  <>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {[0,1,2].map(i => (
+                        <div key={i} style={{ width: 6, height: 6, borderRadius: "50%", background: "#fff", animation: `bounce 1s ${i * 0.15}s infinite` }} />
+                      ))}
+                    </div>
+                    Submitting...
+                  </>
+                ) : "Submit Observation"}
+              </button>
+              <button
                 onClick={() => handleSubmit('draft')}
                 disabled={createObservation.isPending}
+                onMouseEnter={() => setDraftBtnHover(true)}
+                onMouseLeave={() => setDraftBtnHover(false)}
+                style={{
+                  width: "100%",
+                  height: 44,
+                  background: "transparent",
+                  border: `1px solid ${C.border}`,
+                  borderRadius: "0.625rem",
+                  color: draftBtnHover ? C.text : C.muted,
+                  ...HEAD,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: createObservation.isPending ? "not-allowed" : "pointer",
+                  transition: "all 0.15s",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  ...(draftBtnHover ? { background: C.borderMid } : {}),
+                }}
               >
-                <Save className="w-4 h-4 mr-2" /> Save as Draft
-              </Button>
-            </CardFooter>
+                <Save size={15} /> Save as Draft
+              </button>
+            </div>
           </div>
         )}
+      </div>
 
-        {step < 5 && (
-          <CardFooter className="flex justify-between border-t bg-muted/10 p-4">
-            {step > 1 ? (
-              <Button variant="ghost" onClick={handlePrev}><ChevronLeft className="w-4 h-4 mr-1" /> Back</Button>
-            ) : <div></div>}
-            <Button onClick={handleNext} disabled={!canProceed()}>Next <ChevronRight className="w-4 h-4 ml-1" /></Button>
-          </CardFooter>
-        )}
-      </Card>
+      {/* Navigation Footer */}
+      {step < 5 && (
+        <div style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "12px 0",
+        }}>
+          {step > 1 ? (
+            <button
+              onClick={handlePrev}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 4,
+                background: "transparent",
+                border: "none",
+                cursor: "pointer",
+                color: C.muted,
+                ...HEAD,
+                fontSize: 14,
+                fontWeight: 600,
+                padding: "8px 0",
+              }}
+            >
+              <ChevronLeft size={16} /> Back
+            </button>
+          ) : <div />}
+          <button
+            onClick={handleNext}
+            disabled={!canProceed()}
+            onMouseEnter={() => setNextBtnHover(true)}
+            onMouseLeave={() => setNextBtnHover(false)}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 4,
+              background: !canProceed() ? C.emeraldDim : nextBtnHover ? C.emeraldDark : C.emerald,
+              border: "none",
+              borderRadius: "0.625rem",
+              color: "#fff",
+              ...HEAD,
+              fontSize: 14,
+              fontWeight: 700,
+              padding: "10px 20px",
+              cursor: !canProceed() ? "not-allowed" : "pointer",
+              opacity: !canProceed() ? 0.5 : 1,
+              transition: "all 0.15s",
+            }}
+          >
+            Next <ChevronRight size={16} />
+          </button>
+        </div>
+      )}
     </div>
   )
 }
