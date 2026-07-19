@@ -4,7 +4,7 @@ import { useLocation } from "wouter"
 import { ChevronRight, ChevronLeft, MapPin, Camera, Save, Check } from "lucide-react"
 import PhotoUpload from "@/components/PhotoUpload"
 import PhotoGallery from "@/components/PhotoGallery"
-import { MapContainer, TileLayer, Marker } from "react-leaflet"
+import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import L from "leaflet"
 
@@ -56,6 +56,16 @@ function priorityBorderColor(p: string) {
     case "normal": return "#58a6ff"
     default:       return "#8b949e"
   }
+}
+
+// Blickling Estate centre — default map view when no coords yet
+const ESTATE_CENTER: [number, number] = [52.8406, 1.2977]
+const ESTATE_ZOOM = 14
+
+/** Listens for map clicks and calls onPin with the tapped coordinates */
+function MapPinHandler({ onPin }: { onPin: (lat: number, lng: number) => void }) {
+  useMapEvents({ click(e) { onPin(e.latlng.lat, e.latlng.lng) } })
+  return null
 }
 
 interface PendingPhoto {
@@ -180,6 +190,28 @@ export default function ObservationNew() {
     caption: null,
   }))
 
+  // Pin-on-map state
+  const [locationMode, setLocationMode] = useState<"gps" | "pin" | null>(null)
+  const [pinnedPos, setPinnedPos] = useState<{ lat: number; lng: number } | null>(null)
+
+  const handlePinPlaced = (lat: number, lng: number) => {
+    setPinnedPos({ lat, lng })
+    setFormData(d => ({ ...d, latitude: lat, longitude: lng, gpsAccuracy: null }))
+  }
+
+  const handleSelectGpsMode = () => {
+    setLocationMode("gps")
+    setPinnedPos(null)
+    handleGetLocation()
+  }
+
+  const handleSelectPinMode = () => {
+    setLocationMode("pin")
+    // Clear GPS coords when switching to pin mode (pin replaces on click)
+    setFormData(d => ({ ...d, latitude: null, longitude: null, gpsAccuracy: null }))
+    setPinnedPos(null)
+  }
+
   const [gpsBtnHover, setGpsBtnHover] = useState(false)
   const [nextBtnHover, setNextBtnHover] = useState(false)
   const [submitBtnHover, setSubmitBtnHover] = useState(false)
@@ -252,76 +284,191 @@ export default function ObservationNew() {
         {/* STEP 1: Location */}
         {step === 1 && (
           <div>
-            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 20px" }}>
-              Where are you?
+            <h2 style={{ ...HEAD, fontSize: 16, fontWeight: 700, color: C.text, margin: "0 0 6px" }}>
+              Where is this?
             </h2>
-            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <p style={{ ...BODY, fontSize: 13, color: C.muted, margin: "0 0 20px" }}>
+              Use your device location, drop a pin on the map, or choose a named area.
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+
+              {/* ── Option A: GPS ── */}
               <button
-                onClick={handleGetLocation}
+                onClick={handleSelectGpsMode}
                 onMouseEnter={() => setGpsBtnHover(true)}
                 onMouseLeave={() => setGpsBtnHover(false)}
                 style={{
                   width: "100%",
-                  height: 64,
                   display: "flex",
                   alignItems: "center",
-                  justifyContent: "center",
-                  gap: 10,
-                  background: formData.latitude ? C.emeraldTint : gpsBtnHover ? C.borderMid : "transparent",
-                  border: `1px solid ${formData.latitude ? C.emerald : C.border}`,
+                  gap: 12,
+                  padding: "14px 16px",
+                  background: locationMode === "gps" && formData.latitude ? C.emeraldTint : gpsBtnHover ? C.borderMid : C.bg,
+                  border: `1px solid ${locationMode === "gps" && formData.latitude ? C.emerald : C.border}`,
                   borderRadius: "0.625rem",
                   cursor: "pointer",
                   transition: "all 0.2s",
+                  textAlign: "left",
                 }}
               >
-                <MapPin size={20} color={formData.latitude ? C.emerald : C.muted} />
-                <span style={{ ...HEAD, fontSize: 15, fontWeight: 600, color: formData.latitude ? C.emerald : C.text }}>
-                  {formData.latitude ? "GPS Location Captured" : "Capture GPS Location"}
-                </span>
-                {formData.latitude && <Check size={18} color={C.emerald} style={{ marginLeft: "auto" }} />}
+                <div style={{
+                  width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+                  background: locationMode === "gps" && formData.latitude ? C.emeraldTint : C.borderMid,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  <MapPin size={18} color={locationMode === "gps" && formData.latitude ? C.emerald : C.muted} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: locationMode === "gps" && formData.latitude ? C.emerald : C.text }}>
+                    {locationMode === "gps" && formData.latitude ? "GPS location captured" : "Use my current location"}
+                  </div>
+                  {locationMode === "gps" && formData.latitude
+                    ? <div style={{ ...BODY, fontSize: 12, color: C.muted, marginTop: 2 }}>
+                        {formData.latitude.toFixed(5)}, {formData.longitude?.toFixed(5)}
+                        {formData.gpsAccuracy != null && ` · ±${Math.round(formData.gpsAccuracy)}m`}
+                      </div>
+                    : <div style={{ ...BODY, fontSize: 12, color: C.dim, marginTop: 2 }}>Requires device location permission</div>
+                  }
+                </div>
+                {locationMode === "gps" && formData.latitude && <Check size={18} color={C.emerald} strokeWidth={2.5} />}
               </button>
 
-              {formData.latitude && formData.longitude && (
-                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                  <p style={{ ...BODY, fontSize: 12, color: C.muted, margin: 0 }}>
-                    GPS captured: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
-                    {formData.gpsAccuracy != null && ` (±${Math.round(formData.gpsAccuracy)}m)`}
-                  </p>
-                  <div style={{ borderRadius: "0.5rem", overflow: "hidden", border: `1px solid ${C.border}`, height: 150 }}>
-                    <MapContainer
-                      center={[formData.latitude, formData.longitude]}
-                      zoom={16}
-                      style={{ height: "150px", width: "100%" }}
-                      zoomControl={false}
-                      attributionControl={false}
-                      dragging={false}
-                      scrollWheelZoom={false}
-                      doubleClickZoom={false}
-                    >
-                      <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
-                      <Marker position={[formData.latitude, formData.longitude]} />
-                    </MapContainer>
+              {/* ── Option B: Drop a pin ── */}
+              <button
+                onClick={handleSelectPinMode}
+                style={{
+                  width: "100%",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  padding: "14px 16px",
+                  background: locationMode === "pin" ? C.blueTint : C.bg,
+                  border: `1px solid ${locationMode === "pin" ? C.blue : C.border}`,
+                  borderRadius: "0.625rem",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  textAlign: "left",
+                }}
+              >
+                <div style={{
+                  width: 38, height: 38, borderRadius: "50%", flexShrink: 0,
+                  background: locationMode === "pin" ? C.blueTint : C.borderMid,
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                }}>
+                  {/* crosshair icon */}
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={locationMode === "pin" ? C.blue : C.muted} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+                  </svg>
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: locationMode === "pin" ? C.blue : C.text }}>
+                    {locationMode === "pin" && pinnedPos ? "Pin location set" : "Drop a pin on the map"}
                   </div>
+                  {locationMode === "pin" && pinnedPos
+                    ? <div style={{ ...BODY, fontSize: 12, color: C.muted, marginTop: 2 }}>
+                        {pinnedPos.lat.toFixed(5)}, {pinnedPos.lng.toFixed(5)} · tap map to move
+                      </div>
+                    : <div style={{ ...BODY, fontSize: 12, color: C.dim, marginTop: 2 }}>Tap anywhere on the estate map</div>
+                  }
+                </div>
+                {locationMode === "pin" && pinnedPos && <Check size={18} color={C.blue} strokeWidth={2.5} />}
+              </button>
+
+              {/* ── Interactive pin map ── */}
+              {locationMode === "pin" && (
+                <div style={{
+                  borderRadius: "0.625rem",
+                  overflow: "hidden",
+                  border: `1px solid ${C.blue}`,
+                  position: "relative",
+                }}>
+                  {/* instruction banner */}
+                  <div style={{
+                    position: "absolute",
+                    top: 10,
+                    left: "50%",
+                    transform: "translateX(-50%)",
+                    zIndex: 1000,
+                    background: "rgba(13,17,23,0.88)",
+                    border: `1px solid ${C.blue}`,
+                    borderRadius: 9999,
+                    padding: "5px 14px",
+                    ...BODY,
+                    fontSize: 12,
+                    color: C.blue,
+                    whiteSpace: "nowrap",
+                    pointerEvents: "none",
+                  }}>
+                    {pinnedPos ? "Tap to move the pin · drag the marker to fine-tune" : "Tap the map to drop a pin"}
+                  </div>
+
+                  <MapContainer
+                    key="pin-map"
+                    center={pinnedPos ? [pinnedPos.lat, pinnedPos.lng] : ESTATE_CENTER}
+                    zoom={pinnedPos ? 16 : ESTATE_ZOOM}
+                    style={{ height: 300, width: "100%" }}
+                    scrollWheelZoom
+                    doubleClickZoom={false}
+                    attributionControl={false}
+                  >
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <MapPinHandler onPin={handlePinPlaced} />
+                    {pinnedPos && (
+                      <Marker
+                        position={[pinnedPos.lat, pinnedPos.lng]}
+                        draggable
+                        eventHandlers={{
+                          dragend(e) {
+                            const pos = (e.target as L.Marker).getLatLng()
+                            handlePinPlaced(pos.lat, pos.lng)
+                          }
+                        }}
+                      />
+                    )}
+                  </MapContainer>
                 </div>
               )}
 
-              <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              {/* ── GPS preview map ── */}
+              {locationMode === "gps" && formData.latitude && formData.longitude && (
+                <div style={{ borderRadius: "0.5rem", overflow: "hidden", border: `1px solid ${C.emerald}`, height: 150 }}>
+                  <MapContainer
+                    key="gps-map"
+                    center={[formData.latitude, formData.longitude]}
+                    zoom={16}
+                    style={{ height: "150px", width: "100%" }}
+                    zoomControl={false}
+                    attributionControl={false}
+                    dragging={false}
+                    scrollWheelZoom={false}
+                    doubleClickZoom={false}
+                  >
+                    <TileLayer url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png" />
+                    <Marker position={[formData.latitude, formData.longitude]} />
+                  </MapContainer>
+                </div>
+              )}
+
+              {/* ── Divider ── */}
+              <div style={{ display: "flex", alignItems: "center", gap: 12, margin: "4px 0" }}>
                 <div style={{ flex: 1, height: 1, background: C.borderMid }} />
-                <span style={{ ...BODY, fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>Or select location</span>
+                <span style={{ ...BODY, fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: "0.05em" }}>Also add</span>
                 <div style={{ flex: 1, height: 1, background: C.borderMid }} />
               </div>
 
+              {/* ── Named location (always available alongside coords) ── */}
               <div>
-                <label style={labelStyle}>Named Location <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
+                <label style={labelStyle}>Named Estate Area <span style={{ color: C.muted, fontWeight: 400 }}>(optional)</span></label>
                 <select
                   style={{ ...inputStyle }}
                   value={formData.namedLocationId}
                   onChange={e => setFormData(d => ({ ...d, namedLocationId: e.target.value }))}
                 >
-                  <option value="" style={{ background: C.bg, color: C.dim }}>-- Select location --</option>
+                  <option value="" style={{ background: C.bg, color: C.dim }}>-- Select area --</option>
                   {locations?.map(l => <option key={l.id} value={l.id} style={{ background: C.bg, color: C.text }}>{l.name}</option>)}
                 </select>
               </div>
+
             </div>
           </div>
         )}
