@@ -37,7 +37,7 @@ const bottomNavItems = [
   { label: "Home",    href: "/",           icon: LayoutDashboard },
   { label: "Map",     href: "/map",         icon: MapIcon },
   { label: "record",  href: "/observations/new", icon: Plus, special: true },
-  { label: "Actions", href: "/actions/my",  icon: CheckSquare },
+  { label: "Actions", href: "/actions",     icon: CheckSquare },
   { label: "More",    href: "__more__",     icon: ({ className }: { className?: string }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="5" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1" fill="currentColor" stroke="none"/>
@@ -47,8 +47,9 @@ const bottomNavItems = [
 
 const sidebarWork = [
   { label: "Dashboard",     href: "/",              icon: LayoutDashboard },
-  { label: "My Actions",    href: "/actions/my",    icon: CheckSquare },
-  { label: "Observations",  href: "/observations",  icon: ListTodo },
+  { label: "All Actions",   href: "/actions",       icon: CheckSquare },
+  { label: "My Actions",   href: "/actions/my",    icon: CheckSquare },
+  { label: "Observations", href: "/observations",  icon: ListTodo },
   { label: "Map View",      href: "/map",            icon: MapIcon },
 ]
 
