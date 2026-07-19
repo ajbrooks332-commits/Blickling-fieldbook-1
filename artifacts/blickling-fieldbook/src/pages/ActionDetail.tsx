@@ -1,8 +1,8 @@
 import React, { useState } from "react"
-import { useGetAction, useUpdateActionStatus, useCreateNote, getGetActionQueryKey } from "@workspace/api-client-react"
+import { useGetAction, useUpdateActionStatus, useCreateNote, getGetActionQueryKey, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react"
 import { useParams, useLocation, Link } from "wouter"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, ChevronLeft, CheckCircle2, PlayCircle, MessageSquare, FileText, User } from "lucide-react"
+import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, ChevronLeft, CheckCircle2, PlayCircle, MessageSquare, FileText, User, Trash2 } from "lucide-react"
 import { formatShortDate, formatDate } from "@/lib/utils"
 import { useQueryClient } from "@tanstack/react-query"
 
@@ -88,6 +88,9 @@ export default function ActionDetail() {
   const queryClient = useQueryClient()
 
   const { data: act, isLoading } = useGetAction(id, { query: { enabled: !!id, queryKey: getGetActionQueryKey(id) } })
+  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } })
+  const isAdmin = me?.role === "administrator"
+
   const updateStatus = useUpdateActionStatus()
   const createNote = useCreateNote()
 
@@ -97,6 +100,22 @@ export default function ActionDetail() {
   const [statusOpen, setStatusOpen] = useState(false)
   const [statusNote, setStatusNote] = useState("")
   const [pendingStatus, setPendingStatus] = useState<any>(null)
+
+  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDelete = async () => {
+    setDeleting(true)
+    try {
+      const res = await fetch(`/api/actions/${id}`, { method: "DELETE" })
+      if (res.ok) {
+        setDeleteOpen(false)
+        setLocation("/actions")
+      }
+    } finally {
+      setDeleting(false)
+    }
+  }
 
   if (isLoading || !act) {
     return (
@@ -203,6 +222,28 @@ export default function ActionDetail() {
         >
           {statusLabel(act.status)}
         </span>
+
+        {isAdmin && (
+          <button
+            onClick={() => setDeleteOpen(true)}
+            className="flex items-center gap-1.5 ml-auto"
+            style={{
+              ...BODY,
+              fontSize: 12,
+              fontWeight: 500,
+              color: C.urgent,
+              background: C.urgentTint,
+              border: `1px solid rgba(248,81,73,0.25)`,
+              borderRadius: "0.5rem",
+              padding: "4px 10px",
+              cursor: "pointer",
+            }}
+            onMouseEnter={e => (e.currentTarget.style.background = "rgba(248,81,73,0.2)")}
+            onMouseLeave={e => (e.currentTarget.style.background = C.urgentTint)}
+          >
+            <Trash2 className="w-3.5 h-3.5" /> Delete
+          </button>
+        )}
       </div>
 
       {/* Title */}
@@ -620,6 +661,35 @@ export default function ActionDetail() {
               </button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete confirmation dialog */}
+      <Dialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+        <DialogContent style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem" }}>
+          <DialogHeader>
+            <DialogTitle style={{ ...HEAD, color: C.text, fontSize: 17 }}>Delete this action?</DialogTitle>
+          </DialogHeader>
+          <div style={{ padding: "4px 0 8px" }}>
+            <p style={{ ...BODY, color: C.muted, fontSize: 14, lineHeight: 1.6 }}>
+              This will permanently remove <strong style={{ color: C.text }}>{act.referenceNumber}</strong> — <em>{act.title}</em> — along with all its notes and history. This cannot be undone.
+            </p>
+          </div>
+          <DialogFooter>
+            <button
+              onClick={() => setDeleteOpen(false)}
+              style={{ ...BODY, fontSize: 13, color: C.muted, background: "transparent", border: `1px solid ${C.border}`, borderRadius: "0.625rem", padding: "8px 16px", cursor: "pointer" }}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDelete}
+              disabled={deleting}
+              style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: "#fff", background: C.urgent, border: "none", borderRadius: "0.625rem", padding: "8px 16px", cursor: deleting ? "not-allowed" : "pointer", opacity: deleting ? 0.6 : 1 }}
+            >
+              {deleting ? "Deleting…" : "Delete Action"}
+            </button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>

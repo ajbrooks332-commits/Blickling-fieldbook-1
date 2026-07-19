@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { db, actionsTable, observationsTable, usersTable, notesTable, auditEventsTable, namedLocationsTable } from "@workspace/db";
 import { eq, and, desc, asc, count, sql, ilike, or, lte, gte } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { generateActionRef } from "../lib/references";
 
 const router = Router();
@@ -362,6 +362,24 @@ router.patch("/:id/status", requireAuth, async (req, res) => {
   });
 
   res.json(formatAction({ ...action, observationTitle: null, observationRef: null, assignedToName: null, namedLocationName: null }));
+});
+
+// DELETE /actions/:id — admin only
+router.delete("/:id", requireRole("administrator"), async (req, res) => {
+  const id = Number(req.params.id);
+
+  const [existing] = await db.select().from(actionsTable).where(eq(actionsTable.id, id)).limit(1);
+  if (!existing) {
+    res.status(404).json({ error: "Action not found" });
+    return;
+  }
+
+  // Delete associated notes and audit events first, then the action
+  await db.delete(notesTable).where(eq(notesTable.actionId, id));
+  await db.delete(auditEventsTable).where(eq(auditEventsTable.actionId, id));
+  await db.delete(actionsTable).where(eq(actionsTable.id, id));
+
+  res.status(204).send();
 });
 
 export default router;
