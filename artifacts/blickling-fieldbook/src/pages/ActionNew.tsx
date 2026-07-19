@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { useCreateAction, useGetObservation } from "@workspace/api-client-react"
-import { useLocation } from "wouter"
+import { useLocation, useSearch } from "wouter"
 import { Save, Clock, Users, ArrowLeft, Check } from "lucide-react"
 
 const C = {
@@ -78,8 +78,9 @@ const labelStyle: React.CSSProperties = {
 
 export default function ActionNew() {
   const [location, setLocation] = useLocation()
+  const search = useSearch()
 
-  const searchParams = new URLSearchParams(window.location.search)
+  const searchParams = new URLSearchParams(search)
   const obsIdParam = searchParams.get('observationId')
   const observationId = obsIdParam ? Number(obsIdParam) : undefined
 

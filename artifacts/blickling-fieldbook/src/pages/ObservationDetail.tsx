@@ -257,19 +257,61 @@ export default function ObservationDetail() {
           {obs.referenceNumber}
         </span>
 
-        <span
-          style={{
-            background: statusBg(obs.status),
-            color: statusColor(obs.status),
-            borderRadius: "9999px",
-            padding: "3px 10px",
-            fontSize: 11,
-            fontWeight: 600,
-            ...HEAD,
-          }}
-        >
-          {statusLabel(obs.status)}
-        </span>
+        {obs.status === "action_required" && obs.actions && obs.actions.length > 0 ? (
+          obs.actions.length === 1 ? (
+            <button
+              onClick={() => setLocation(`/actions/${obs.actions[0].id}`)}
+              style={{
+                background: statusBg(obs.status),
+                color: statusColor(obs.status),
+                borderRadius: "9999px",
+                padding: "3px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textDecorationStyle: "dotted",
+                ...HEAD,
+              }}
+            >
+              {statusLabel(obs.status)}
+            </button>
+          ) : (
+            <button
+              onClick={() => document.getElementById("linked-actions")?.scrollIntoView({ behavior: "smooth" })}
+              style={{
+                background: statusBg(obs.status),
+                color: statusColor(obs.status),
+                borderRadius: "9999px",
+                padding: "3px 10px",
+                fontSize: 11,
+                fontWeight: 600,
+                border: "none",
+                cursor: "pointer",
+                textDecoration: "underline",
+                textDecorationStyle: "dotted",
+                ...HEAD,
+              }}
+            >
+              {statusLabel(obs.status)}
+            </button>
+          )
+        ) : (
+          <span
+            style={{
+              background: statusBg(obs.status),
+              color: statusColor(obs.status),
+              borderRadius: "9999px",
+              padding: "3px 10px",
+              fontSize: 11,
+              fontWeight: 600,
+              ...HEAD,
+            }}
+          >
+            {statusLabel(obs.status)}
+          </span>
+        )}
 
         <span
           className="flex items-center gap-1"
@@ -519,7 +561,7 @@ export default function ObservationDetail() {
           </SectionCard>
 
           {/* Linked Actions */}
-          <div className="space-y-3">
+          <div id="linked-actions" className="space-y-3">
             <h2 style={{ ...HEAD, color: C.text, fontSize: 14, fontWeight: 600, margin: 0 }}>
               Linked Actions
             </h2>
