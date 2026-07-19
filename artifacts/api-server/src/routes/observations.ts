@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, observationsTable, categoriesTable, namedLocationsTable, usersTable, actionsTable, notesTable, auditEventsTable } from "@workspace/db";
-import { eq, and, desc, asc, count, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, asc, count, sql, ilike, or, inArray } from "drizzle-orm";
 import { requireAuth } from "../lib/auth";
 import { generateObservationRef } from "../lib/references";
 
@@ -79,7 +79,7 @@ router.get("/", requireAuth, async (req, res) => {
     const counts = await db
       .select({ observationId: actionsTable.observationId, cnt: count() })
       .from(actionsTable)
-      .where(sql`${actionsTable.observationId} = ANY(ARRAY[${sql.join(ids.map(id => sql`${id}`), sql`, `)}])`)
+      .where(inArray(actionsTable.observationId, ids))
       .groupBy(actionsTable.observationId);
     for (const c of counts) {
       if (c.observationId) actionCounts[c.observationId] = Number(c.cnt);
