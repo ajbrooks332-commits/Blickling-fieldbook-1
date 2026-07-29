@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "7_lLJRqJNyI5vqR5USfbc"
+uri = "file://blickling-fieldbook-build-report.md"
+type = "text"
+title = "Blickling Fieldbook — Build Report"
