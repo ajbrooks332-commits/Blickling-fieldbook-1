@@ -1055,6 +1055,108 @@ export const CreateNoteResponse = zod.object({
 
 
 /**
+ * @summary List activity types for the estate
+ */
+export const ListActivityTypesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sortOrder": zod.number(),
+  "active": zod.boolean()
+})
+export const ListActivityTypesResponse = zod.array(ListActivityTypesResponseItem)
+
+
+/**
+ * @summary Create an activity type (admin/manager)
+ */
+export const createActivityTypeBodyNameMax = 200;
+
+
+
+export const CreateActivityTypeBody = zod.object({
+  "name": zod.string().min(1).max(createActivityTypeBodyNameMax)
+})
+
+export const CreateActivityTypeResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "sortOrder": zod.number(),
+  "active": zod.boolean()
+})
+
+
+/**
+ * @summary List daily activity entries
+ */
+export const ListActivitiesQueryParams = zod.object({
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional(),
+  "page": zod.coerce.number().optional(),
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListActivitiesResponse = zod.object({
+  "activities": zod.array(zod.object({
+  "id": zod.number(),
+  "activityTypeId": zod.number(),
+  "activityTypeName": zod.string(),
+  "namedLocationId": zod.number().nullish(),
+  "namedLocationName": zod.string().nullish(),
+  "activityDate": zod.string(),
+  "durationMinutes": zod.number(),
+  "notes": zod.string().nullish(),
+  "recordedByUserId": zod.number(),
+  "recordedByName": zod.string(),
+  "participants": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})),
+  "createdAt": zod.string()
+})),
+  "total": zod.number(),
+  "page": zod.number(),
+  "limit": zod.number()
+})
+
+
+/**
+ * @summary Record a daily activity
+ */
+export const createActivityBodyActivityDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
+export const createActivityBodyDurationMinutesMin = 5;
+export const createActivityBodyDurationMinutesMax = 1440;
+
+export const createActivityBodyParticipantUserIdsMax = 50;
+
+export const createActivityBodyNotesMax = 2000;
+
+
+
+export const CreateActivityBody = zod.object({
+  "activityTypeId": zod.number(),
+  "namedLocationId": zod.number().nullish(),
+  "activityDate": zod.string().regex(createActivityBodyActivityDateRegExp).describe('Calendar date (YYYY-MM-DD); must not be in the future.'),
+  "durationMinutes": zod.number().min(createActivityBodyDurationMinutesMin).max(createActivityBodyDurationMinutesMax),
+  "participantUserIds": zod.array(zod.number()).max(createActivityBodyParticipantUserIdsMax).optional(),
+  "notes": zod.string().max(createActivityBodyNotesMax).nullish()
+})
+
+export const CreateActivityResponse = zod.object({
+  "id": zod.number()
+})
+
+
+/**
+ * @summary Delete an activity entry (creator or manager/admin)
+ */
+export const DeleteActivityParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteActivityResponse = zod.void()
+
+
+/**
  * @summary Get dashboard summary statistics
  */
 export const GetDashboardSummaryResponse = zod.object({

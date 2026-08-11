@@ -205,6 +205,67 @@ export interface NamedLocationUpdate {
   active?: boolean;
 }
 
+export interface ActivityType {
+  id: number;
+  name: string;
+  sortOrder: number;
+  active: boolean;
+}
+
+export interface ActivityTypeInput {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+}
+
+export interface ActivityParticipant {
+  id: number;
+  name: string;
+}
+
+export interface ActivityLog {
+  id: number;
+  activityTypeId: number;
+  activityTypeName: string;
+  /** @nullable */
+  namedLocationId?: number | null;
+  /** @nullable */
+  namedLocationName?: string | null;
+  activityDate: string;
+  durationMinutes: number;
+  /** @nullable */
+  notes?: string | null;
+  recordedByUserId: number;
+  recordedByName: string;
+  participants: ActivityParticipant[];
+  createdAt: string;
+}
+
+export interface ActivityLogInput {
+  activityTypeId: number;
+  /** @nullable */
+  namedLocationId?: number | null;
+  /**
+     * Calendar date (YYYY-MM-DD); must not be in the future.
+     * @pattern ^\d{4}-\d{2}-\d{2}$
+     */
+  activityDate: string;
+  /**
+     * @minimum 5
+     * @maximum 1440
+     */
+  durationMinutes: number;
+  /** @maxItems 50 */
+  participantUserIds?: number[];
+  /**
+     * @maxLength 2000
+     * @nullable
+     */
+  notes?: string | null;
+}
+
 export type ObservationPriority = typeof ObservationPriority[keyof typeof ObservationPriority];
 
 
@@ -837,6 +898,24 @@ overdue?: boolean;
 search?: string;
 page?: number;
 limit?: number;
+};
+
+export type ListActivitiesParams = {
+from?: string;
+to?: string;
+page?: number;
+limit?: number;
+};
+
+export type ListActivities200 = {
+  activities: ActivityLog[];
+  total: number;
+  page: number;
+  limit: number;
+};
+
+export type CreateActivity201 = {
+  id: number;
 };
 
 export type GetReportSummaryParams = {

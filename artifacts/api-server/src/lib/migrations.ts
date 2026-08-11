@@ -229,6 +229,36 @@ const statements = [
   `CREATE INDEX IF NOT EXISTS audit_events_property_created_idx
     ON audit_events(property_id, created_at DESC)`,
   `CREATE INDEX IF NOT EXISTS upload_grants_expiry_idx ON upload_grants(expires_at)`,
+  `CREATE TABLE IF NOT EXISTS activity_types (
+    id serial PRIMARY KEY,
+    property_id integer REFERENCES properties(id),
+    name text NOT NULL,
+    sort_order integer NOT NULL DEFAULT 0,
+    active boolean NOT NULL DEFAULT true,
+    created_at timestamp NOT NULL DEFAULT now()
+  )`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS activity_types_property_name_uq
+    ON activity_types(property_id, name)`,
+  `CREATE TABLE IF NOT EXISTS activity_logs (
+    id serial PRIMARY KEY,
+    property_id integer NOT NULL REFERENCES properties(id),
+    activity_type_id integer NOT NULL REFERENCES activity_types(id),
+    named_location_id integer REFERENCES named_locations(id),
+    activity_date date NOT NULL,
+    duration_minutes integer NOT NULL CHECK (duration_minutes > 0 AND duration_minutes <= 1440),
+    notes text,
+    recorded_by_user_id integer NOT NULL REFERENCES users(id),
+    created_at timestamp NOT NULL DEFAULT now(),
+    deleted_at timestamp,
+    deleted_by_user_id integer REFERENCES users(id)
+  )`,
+  `CREATE TABLE IF NOT EXISTS activity_log_participants (
+    activity_log_id integer NOT NULL REFERENCES activity_logs(id) ON DELETE CASCADE,
+    user_id integer NOT NULL REFERENCES users(id),
+    PRIMARY KEY (activity_log_id, user_id)
+  )`,
+  `CREATE INDEX IF NOT EXISTS activity_logs_property_date_idx
+    ON activity_logs(property_id, activity_date DESC) WHERE deleted_at IS NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

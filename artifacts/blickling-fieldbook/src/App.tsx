@@ -20,6 +20,7 @@ const ObservationNew = lazy(() => import("@/pages/ObservationNew"));
 const ObservationDetail = lazy(() => import("@/pages/ObservationDetail"));
 const ObservationEdit = lazy(() => import("@/pages/ObservationEdit"));
 const MapView = lazy(() => import("@/pages/MapView"));
+const Activities = lazy(() => import("@/pages/Activities"));
 const Reports = lazy(() => import("@/pages/Reports"));
 const Users = lazy(() => import("@/pages/Users"));
 const Categories = lazy(() => import("@/pages/Categories"));
@@ -64,6 +65,7 @@ function AuthenticatedRoutes({ user }: { user: AuthUser }) {
       <Route path="/actions/:id" component={ActionDetail} />
       <Route path="/actions" component={ActionList} />
       <Route path="/map" component={MapView} />
+      <Route path="/activities" component={Activities} />
       <Route path="/reports">{() => <RolePage user={user} roles={managers}><Reports /></RolePage>}</Route>
       <Route path="/users">{() => <RolePage user={user} roles={["administrator"]}><Users /></RolePage>}</Route>
       <Route path="/categories">{() => <RolePage user={user} roles={managers}><Categories /></RolePage>}</Route>

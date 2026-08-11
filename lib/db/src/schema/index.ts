@@ -11,3 +11,4 @@ export * from "./action-images";
 export * from "./app-settings";
 export * from "./upload-grants";
 export * from "./reference-counters";
+export * from "./activities";

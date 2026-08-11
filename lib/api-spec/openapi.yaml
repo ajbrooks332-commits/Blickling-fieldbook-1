@@ -720,6 +720,119 @@ paths:
               schema:
                 $ref: "#/components/schemas/Note"
 
+  # Activity log
+  /activity-types:
+    get:
+      operationId: listActivityTypes
+      tags: [activities]
+      summary: List activity types for the estate
+      responses:
+        "200":
+          description: List of activity types
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActivityType"
+
+    post:
+      operationId: createActivityType
+      tags: [activities]
+      summary: Create an activity type (admin/manager)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityTypeInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityType"
+
+  /activities:
+    get:
+      operationId: listActivities
+      tags: [activities]
+      summary: List daily activity entries
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Paginated activities
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [activities, total, page, limit]
+                properties:
+                  activities:
+                    type: array
+                    items:
+                      $ref: "#/components/schemas/ActivityLog"
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+
+    post:
+      operationId: createActivity
+      tags: [activities]
+      summary: Record a daily activity
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ActivityLogInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id]
+                properties:
+                  id:
+                    type: integer
+
+  /activities/{id}:
+    delete:
+      operationId: deleteActivity
+      tags: [activities]
+      summary: Delete an activity entry (creator or manager/admin)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
   # Dashboard
   /dashboard/summary:
     get:
@@ -1198,6 +1311,94 @@ components:
           type: ["number", "null"]
         active:
           type: boolean
+
+    # Activity log
+    ActivityType:
+      type: object
+      required: [id, name, sortOrder, active]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        sortOrder:
+          type: integer
+        active:
+          type: boolean
+
+    ActivityTypeInput:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+
+    ActivityParticipant:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    ActivityLog:
+      type: object
+      required: [id, activityTypeId, activityTypeName, activityDate, durationMinutes, recordedByUserId, recordedByName, participants, createdAt]
+      properties:
+        id:
+          type: integer
+        activityTypeId:
+          type: integer
+        activityTypeName:
+          type: string
+        namedLocationId:
+          type: ["integer", "null"]
+        namedLocationName:
+          type: ["string", "null"]
+        activityDate:
+          type: string
+        durationMinutes:
+          type: integer
+        notes:
+          type: ["string", "null"]
+        recordedByUserId:
+          type: integer
+        recordedByName:
+          type: string
+        participants:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityParticipant"
+        createdAt:
+          type: string
+
+    ActivityLogInput:
+      type: object
+      required: [activityTypeId, activityDate, durationMinutes]
+      properties:
+        activityTypeId:
+          type: integer
+        namedLocationId:
+          type: ["integer", "null"]
+        activityDate:
+          type: string
+          pattern: "^\\d{4}-\\d{2}-\\d{2}$"
+          description: Calendar date (YYYY-MM-DD); must not be in the future.
+        durationMinutes:
+          type: integer
+          minimum: 5
+          maximum: 1440
+        participantUserIds:
+          type: array
+          maxItems: 50
+          items:
+            type: integer
+        notes:
+          type: ["string", "null"]
+          maxLength: 2000
 
     # Observations
     Observation:

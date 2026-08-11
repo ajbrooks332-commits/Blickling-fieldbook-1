@@ -1,1 +1,2 @@
 - [Blickling Fieldbook Phase 1](blickling-fieldbook-phase1.md) — full-stack field recording PWA; Phase 1 complete, Phase 2 (map, photos, offline) not yet built.
+- [Blickling API curl testing](blickling-api-testing.md) — non-GET API calls need Origin + X-Requested-With headers; dev admin exists; inline OpenAPI bodies break codegen.

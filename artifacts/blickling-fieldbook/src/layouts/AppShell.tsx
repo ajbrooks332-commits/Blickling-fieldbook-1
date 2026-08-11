@@ -5,6 +5,7 @@ import {
   Map as MapIcon,
   Plus,
   CheckSquare,
+  ClipboardList,
   X,
   FileText,
   Users,
@@ -51,6 +52,7 @@ const sidebarWork = [
   { label: "All Actions",   href: "/actions",       icon: CheckSquare },
   { label: "My Actions",   href: "/actions/my",    icon: CheckSquare },
   { label: "Observations", href: "/observations",  icon: ListTodo },
+  { label: "Activities",   href: "/activities",    icon: ClipboardList },
   { label: "Map View",      href: "/map",            icon: MapIcon },
   { label: "Settings",      href: "/settings",       icon: Settings },
 ]
@@ -279,6 +281,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
                 <DrawerItem icon={ListTodo}  label="All Observations" onClick={() => { setLocation("/observations"); setDrawerOpen(false) }} />
                 <DrawerItem icon={CheckSquare} label="All Actions"   onClick={() => { setLocation("/actions"); setDrawerOpen(false) }} />
                 <DrawerItem icon={CheckSquare} label="My Actions" onClick={() => { setLocation("/actions/my"); setDrawerOpen(false) }} />
+                <DrawerItem icon={ClipboardList} label="Activities" onClick={() => { setLocation("/activities"); setDrawerOpen(false) }} />
                 <DrawerItem icon={Settings} label="Settings" onClick={() => { setLocation("/settings"); setDrawerOpen(false) }} />
               </DrawerSection>
 
