@@ -11,7 +11,7 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-runButton = "Project"
+runButton = "artifacts/api-server: API Server"
 
 [agent]
 stack = "PNPM_WORKSPACE"
