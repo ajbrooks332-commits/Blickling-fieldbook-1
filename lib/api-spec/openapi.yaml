@@ -31,9 +31,13 @@ tags:
   - name: storage
     description: File upload and object serving
 
+security:
+  - cookieAuth: []
+
 paths:
   /healthz:
     get:
+      security: []
       operationId: healthCheck
       tags: [health]
       summary: Health check
@@ -46,8 +50,43 @@ paths:
                 $ref: "#/components/schemas/HealthStatus"
 
   # Auth
+  /auth/setup-status:
+    get:
+      security: []
+      operationId: getSetupStatus
+      tags: [auth]
+      summary: Check whether initial administrator setup is required
+      responses:
+        "200":
+          description: Setup state
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SetupStatus"
+
+  /auth/setup:
+    post:
+      security: []
+      operationId: completeSetup
+      tags: [auth]
+      summary: Complete the one-time secret-protected administrator setup
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetupInput"
+      responses:
+        "201":
+          description: Setup completed and administrator signed in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AuthUser"
+
   /auth/login:
     post:
+      security: []
       operationId: login
       tags: [auth]
       summary: Log in with email and password
@@ -91,12 +130,42 @@ paths:
         "401":
           description: Not authenticated
 
+  /auth/change-password:
+    post:
+      operationId: changePassword
+      tags: [auth]
+      summary: Change the current user's password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChangePasswordInput"
+      responses:
+        "200":
+          description: Password changed
+
   # Users
+  /users/assignees:
+    get:
+      operationId: listAssignees
+      tags: [users]
+      summary: List active users available for action assignment
+      responses:
+        "200":
+          description: Assignees
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Assignee"
+
   /users:
     get:
       operationId: listUsers
       tags: [users]
-      summary: List all users (admin/manager)
+      summary: List all users (administrator only)
       responses:
         "200":
           description: List of users
@@ -187,7 +256,7 @@ paths:
     post:
       operationId: createCategory
       tags: [categories]
-      summary: Create a category (admin)
+      summary: Create a category (administrator/manager)
       requestBody:
         required: true
         content:
@@ -206,7 +275,7 @@ paths:
     patch:
       operationId: updateCategory
       tags: [categories]
-      summary: Update a category (admin)
+      summary: Update a category (administrator/manager)
       parameters:
         - name: id
           in: path
@@ -535,7 +604,7 @@ paths:
     post:
       operationId: createAction
       tags: [actions]
-      summary: Create a new action
+      summary: Create a new assigned action (administrator/manager)
       requestBody:
         required: true
         content:
@@ -703,6 +772,32 @@ paths:
               schema:
                 $ref: "#/components/schemas/ReportSummary"
 
+  /reports/export.csv:
+    get:
+      operationId: exportReportCsv
+      tags: [reports]
+      summary: Export observations for a date range as CSV
+      parameters:
+        - name: dateFrom
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: CSV export
+          content:
+            text/csv:
+              schema:
+                type: string
+
   # Storage
   /storage/uploads/request-url:
     post:
@@ -856,6 +951,11 @@ paths:
           description: Deleted
 
 components:
+  securitySchemes:
+    cookieAuth:
+      type: apiKey
+      in: cookie
+      name: blickling.sid
   schemas:
     HealthStatus:
       type: object
@@ -873,10 +973,47 @@ components:
           type: string
         password:
           type: string
+          maxLength: 128
+
+    SetupStatus:
+      type: object
+      required: [required]
+      properties:
+        required:
+          type: boolean
+
+    SetupInput:
+      type: object
+      required: [setupSecret, name, email, password]
+      properties:
+        setupSecret:
+          type: string
+          minLength: 24
+        name:
+          type: string
+          minLength: 2
+          maxLength: 120
+        email:
+          type: string
+        password:
+          type: string
+          minLength: 14
+          maxLength: 128
+
+    ChangePasswordInput:
+      type: object
+      required: [currentPassword, newPassword]
+      properties:
+        currentPassword:
+          type: string
+        newPassword:
+          type: string
+          minLength: 14
+          maxLength: 128
 
     AuthUser:
       type: object
-      required: [id, name, email, role, propertyId]
+      required: [id, name, email, role, propertyId, active, mustChangePassword]
       properties:
         id:
           type: integer
@@ -890,6 +1027,8 @@ components:
         propertyId:
           type: integer
         active:
+          type: boolean
+        mustChangePassword:
           type: boolean
 
     # Users
@@ -928,8 +1067,8 @@ components:
           enum: [administrator, manager, team_member]
         password:
           type: string
-        propertyId:
-          type: integer
+          minLength: 14
+          maxLength: 128
 
     UserUpdate:
       type: object
@@ -945,6 +1084,20 @@ components:
           type: boolean
         password:
           type: string
+          minLength: 14
+          maxLength: 128
+
+    Assignee:
+      type: object
+      required: [id, name, role]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        role:
+          type: string
+          enum: [administrator, manager, team_member]
 
     # Categories
     Category:
@@ -989,11 +1142,11 @@ components:
         name:
           type: string
         description:
-          type: string
+          type: ["string", "null"]
         icon:
-          type: string
+          type: ["string", "null"]
         displayColour:
-          type: string
+          type: ["string", "null"]
         sortOrder:
           type: integer
         active:
@@ -1038,11 +1191,11 @@ components:
         name:
           type: string
         description:
-          type: string
+          type: ["string", "null"]
         latitude:
-          type: number
+          type: ["number", "null"]
         longitude:
-          type: number
+          type: ["number", "null"]
         active:
           type: boolean
 
@@ -1092,6 +1245,8 @@ components:
         publicAccessAffected:
           type: boolean
         machineryRequired:
+          type: boolean
+        specialistRequired:
           type: boolean
         followUpRequired:
           type: boolean
@@ -1149,6 +1304,8 @@ components:
         publicAccessAffected:
           type: boolean
         machineryRequired:
+          type: boolean
+        specialistRequired:
           type: boolean
         followUpRequired:
           type: boolean
@@ -1246,6 +1403,8 @@ components:
           type: boolean
         machineryRequired:
           type: boolean
+        specialistRequired:
+          type: boolean
         followUpRequired:
           type: boolean
         createdOffline:
@@ -1258,30 +1417,31 @@ components:
       properties:
         title:
           type: string
-          maxLength: 100
+          maxLength: 200
         description:
-          type: string
+          type: ["string", "null"]
         categoryId:
           type: integer
         priority:
           type: string
           enum: [low, normal, high, urgent]
-        status:
-          type: string
-          enum: [draft, submitted, under_review, action_required, monitoring, resolved, closed, cancelled]
         observedAt:
           type: string
         latitude:
-          type: number
+          type: ["number", "null"]
         longitude:
-          type: number
+          type: ["number", "null"]
+        gpsAccuracyMetres:
+          type: ["number", "null"]
         namedLocationId:
-          type: integer
+          type: ["integer", "null"]
         safetyIssue:
           type: boolean
         publicAccessAffected:
           type: boolean
         machineryRequired:
+          type: boolean
+        specialistRequired:
           type: boolean
         followUpRequired:
           type: boolean
@@ -1452,7 +1612,7 @@ components:
 
     ActionInput:
       type: object
-      required: [title, priority, status]
+      required: [title, assignedToUserId, priority, status]
       properties:
         title:
           type: string
@@ -1467,9 +1627,10 @@ components:
           enum: [low, normal, high, urgent]
         status:
           type: string
-          enum: [not_started, planned, in_progress, waiting, completed, cancelled]
+          enum: [not_started, planned]
         dueDate:
           type: string
+          format: date
         estimatedMinutes:
           type: integer
         equipmentRequired:
@@ -1478,6 +1639,10 @@ components:
           type: boolean
         notes:
           type: string
+        createdOffline:
+          type: boolean
+        offlineId:
+          type: string
 
     ActionUpdate:
       type: object
@@ -1485,29 +1650,23 @@ components:
         title:
           type: string
         description:
-          type: string
+          type: ["string", "null"]
+        observationId:
+          type: ["integer", "null"]
         assignedToUserId:
           type: integer
         priority:
           type: string
           enum: [low, normal, high, urgent]
-        status:
-          type: string
-          enum: [not_started, planned, in_progress, waiting, completed, cancelled]
         dueDate:
-          type: string
+          type: ["string", "null"]
+          format: date
         estimatedMinutes:
-          type: integer
+          type: ["integer", "null"]
         equipmentRequired:
           type: boolean
         contractorRequired:
           type: boolean
-        completionNote:
-          type: string
-        waitingReason:
-          type: string
-        cancellationReason:
-          type: string
 
     ActionStatusUpdate:
       type: object
@@ -1536,6 +1695,8 @@ components:
           type: ["integer", "null"]
         actionId:
           type: ["integer", "null"]
+        offlineId:
+          type: ["string", "null"]
         createdByUserId:
           type: integer
         createdByName:
@@ -1553,6 +1714,8 @@ components:
           type: integer
         actionId:
           type: integer
+        offlineId:
+          type: string
 
     # Audit
     AuditEvent:

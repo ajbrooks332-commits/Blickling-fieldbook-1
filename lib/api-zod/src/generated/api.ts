@@ -17,11 +17,54 @@ export const HealthCheckResponse = zod.object({
 
 
 /**
+ * @summary Check whether initial administrator setup is required
+ */
+export const GetSetupStatusResponse = zod.object({
+  "required": zod.boolean()
+})
+
+
+/**
+ * @summary Complete the one-time secret-protected administrator setup
+ */
+export const completeSetupBodySetupSecretMin = 24;
+
+export const completeSetupBodyNameMin = 2;
+export const completeSetupBodyNameMax = 120;
+
+export const completeSetupBodyPasswordMin = 14;
+export const completeSetupBodyPasswordMax = 128;
+
+
+
+export const CompleteSetupBody = zod.object({
+  "setupSecret": zod.string().min(completeSetupBodySetupSecretMin),
+  "name": zod.string().min(completeSetupBodyNameMin).max(completeSetupBodyNameMax),
+  "email": zod.string(),
+  "password": zod.string().min(completeSetupBodyPasswordMin).max(completeSetupBodyPasswordMax)
+})
+
+export const CompleteSetupResponse = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "email": zod.string(),
+  "role": zod.enum(['administrator', 'manager', 'team_member']),
+  "propertyId": zod.number(),
+  "active": zod.boolean(),
+  "mustChangePassword": zod.boolean()
+})
+
+
+/**
  * @summary Log in with email and password
  */
+export const loginBodyPasswordMax = 128;
+
+
+
 export const LoginBody = zod.object({
   "email": zod.string(),
-  "password": zod.string()
+  "password": zod.string().max(loginBodyPasswordMax)
 })
 
 export const LoginResponse = zod.object({
@@ -30,7 +73,8 @@ export const LoginResponse = zod.object({
   "email": zod.string(),
   "role": zod.enum(['administrator', 'manager', 'team_member']),
   "propertyId": zod.number(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean(),
+  "mustChangePassword": zod.boolean()
 })
 
 
@@ -49,12 +93,40 @@ export const GetMeResponse = zod.object({
   "email": zod.string(),
   "role": zod.enum(['administrator', 'manager', 'team_member']),
   "propertyId": zod.number(),
-  "active": zod.boolean().optional()
+  "active": zod.boolean(),
+  "mustChangePassword": zod.boolean()
 })
 
 
 /**
- * @summary List all users (admin/manager)
+ * @summary Change the current user's password
+ */
+export const changePasswordBodyNewPasswordMin = 14;
+export const changePasswordBodyNewPasswordMax = 128;
+
+
+
+export const ChangePasswordBody = zod.object({
+  "currentPassword": zod.string(),
+  "newPassword": zod.string().min(changePasswordBodyNewPasswordMin).max(changePasswordBodyNewPasswordMax)
+})
+
+export const ChangePasswordResponse = zod.unknown()
+
+
+/**
+ * @summary List active users available for action assignment
+ */
+export const ListAssigneesResponseItem = zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "role": zod.enum(['administrator', 'manager', 'team_member'])
+})
+export const ListAssigneesResponse = zod.array(ListAssigneesResponseItem)
+
+
+/**
+ * @summary List all users (administrator only)
  */
 export const ListUsersResponseItem = zod.object({
   "id": zod.number(),
@@ -72,12 +144,16 @@ export const ListUsersResponse = zod.array(ListUsersResponseItem)
 /**
  * @summary Create a new user (admin)
  */
+export const createUserBodyPasswordMin = 14;
+export const createUserBodyPasswordMax = 128;
+
+
+
 export const CreateUserBody = zod.object({
   "name": zod.string(),
   "email": zod.string(),
   "role": zod.enum(['administrator', 'manager', 'team_member']),
-  "password": zod.string(),
-  "propertyId": zod.number().optional()
+  "password": zod.string().min(createUserBodyPasswordMin).max(createUserBodyPasswordMax)
 })
 
 export const CreateUserResponse = zod.object({
@@ -118,12 +194,17 @@ export const UpdateUserParams = zod.object({
   "id": zod.coerce.number()
 })
 
+export const updateUserBodyPasswordMin = 14;
+export const updateUserBodyPasswordMax = 128;
+
+
+
 export const UpdateUserBody = zod.object({
   "name": zod.string().optional(),
   "email": zod.string().optional(),
   "role": zod.enum(['administrator', 'manager', 'team_member']).optional(),
   "active": zod.boolean().optional(),
-  "password": zod.string().optional()
+  "password": zod.string().min(updateUserBodyPasswordMin).max(updateUserBodyPasswordMax).optional()
 })
 
 export const UpdateUserResponse = zod.object({
@@ -155,7 +236,7 @@ export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
 
 
 /**
- * @summary Create a category (admin)
+ * @summary Create a category (administrator/manager)
  */
 export const CreateCategoryBody = zod.object({
   "name": zod.string(),
@@ -178,7 +259,7 @@ export const CreateCategoryResponse = zod.object({
 
 
 /**
- * @summary Update a category (admin)
+ * @summary Update a category (administrator/manager)
  */
 export const UpdateCategoryParams = zod.object({
   "id": zod.coerce.number()
@@ -186,9 +267,9 @@ export const UpdateCategoryParams = zod.object({
 
 export const UpdateCategoryBody = zod.object({
   "name": zod.string().optional(),
-  "description": zod.string().optional(),
-  "icon": zod.string().optional(),
-  "displayColour": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "icon": zod.string().nullish(),
+  "displayColour": zod.string().nullish(),
   "sortOrder": zod.number().optional(),
   "active": zod.boolean().optional()
 })
@@ -250,9 +331,9 @@ export const UpdateLocationParams = zod.object({
 
 export const UpdateLocationBody = zod.object({
   "name": zod.string().optional(),
-  "description": zod.string().optional(),
-  "latitude": zod.number().optional(),
-  "longitude": zod.number().optional(),
+  "description": zod.string().nullish(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
   "active": zod.boolean().optional()
 })
 
@@ -307,6 +388,7 @@ export const ListObservationsResponse = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "actionCount": zod.number().optional(),
   "propertyId": zod.number().optional(),
@@ -340,6 +422,7 @@ export const CreateObservationBody = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "createdOffline": zod.boolean().optional(),
   "offlineId": zod.string().optional()
@@ -366,6 +449,7 @@ export const CreateObservationResponse = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "actionCount": zod.number().optional(),
   "propertyId": zod.number().optional(),
@@ -429,6 +513,7 @@ export const GetObservationResponse = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "propertyId": zod.number().optional(),
   "createdAt": zod.string(),
@@ -462,6 +547,7 @@ export const GetObservationResponse = zod.object({
   "body": zod.string(),
   "observationId": zod.number().nullish(),
   "actionId": zod.number().nullish(),
+  "offlineId": zod.string().nullish(),
   "createdByUserId": zod.number(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -486,23 +572,24 @@ export const UpdateObservationParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const updateObservationBodyTitleMax = 100;
+export const updateObservationBodyTitleMax = 200;
 
 
 
 export const UpdateObservationBody = zod.object({
   "title": zod.string().max(updateObservationBodyTitleMax).optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
   "categoryId": zod.number().optional(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  "status": zod.enum(['draft', 'submitted', 'under_review', 'action_required', 'monitoring', 'resolved', 'closed', 'cancelled']).optional(),
   "observedAt": zod.string().optional(),
-  "latitude": zod.number().optional(),
-  "longitude": zod.number().optional(),
-  "namedLocationId": zod.number().optional(),
+  "latitude": zod.number().nullish(),
+  "longitude": zod.number().nullish(),
+  "gpsAccuracyMetres": zod.number().nullish(),
+  "namedLocationId": zod.number().nullish(),
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional()
 })
 
@@ -527,6 +614,7 @@ export const UpdateObservationResponse = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "actionCount": zod.number().optional(),
   "propertyId": zod.number().optional(),
@@ -578,6 +666,7 @@ export const UpdateObservationStatusResponse = zod.object({
   "safetyIssue": zod.boolean().optional(),
   "publicAccessAffected": zod.boolean().optional(),
   "machineryRequired": zod.boolean().optional(),
+  "specialistRequired": zod.boolean().optional(),
   "followUpRequired": zod.boolean().optional(),
   "actionCount": zod.number().optional(),
   "propertyId": zod.number().optional(),
@@ -632,20 +721,22 @@ export const ListActionsResponse = zod.object({
 
 
 /**
- * @summary Create a new action
+ * @summary Create a new assigned action (administrator/manager)
  */
 export const CreateActionBody = zod.object({
   "title": zod.string(),
   "description": zod.string().optional(),
   "observationId": zod.number().optional(),
-  "assignedToUserId": zod.number().optional(),
+  "assignedToUserId": zod.number(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']),
-  "status": zod.enum(['not_started', 'planned', 'in_progress', 'waiting', 'completed', 'cancelled']),
-  "dueDate": zod.string().optional(),
+  "status": zod.enum(['not_started', 'planned']),
+  "dueDate": zod.coerce.date().optional(),
   "estimatedMinutes": zod.number().optional(),
   "equipmentRequired": zod.boolean().optional(),
   "contractorRequired": zod.boolean().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "createdOffline": zod.boolean().optional(),
+  "offlineId": zod.string().optional()
 })
 
 export const CreateActionResponse = zod.object({
@@ -838,6 +929,7 @@ export const GetActionResponse = zod.object({
   "body": zod.string(),
   "observationId": zod.number().nullish(),
   "actionId": zod.number().nullish(),
+  "offlineId": zod.string().nullish(),
   "createdByUserId": zod.number(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -864,17 +956,14 @@ export const UpdateActionParams = zod.object({
 
 export const UpdateActionBody = zod.object({
   "title": zod.string().optional(),
-  "description": zod.string().optional(),
+  "description": zod.string().nullish(),
+  "observationId": zod.number().nullish(),
   "assignedToUserId": zod.number().optional(),
   "priority": zod.enum(['low', 'normal', 'high', 'urgent']).optional(),
-  "status": zod.enum(['not_started', 'planned', 'in_progress', 'waiting', 'completed', 'cancelled']).optional(),
-  "dueDate": zod.string().optional(),
-  "estimatedMinutes": zod.number().optional(),
+  "dueDate": zod.coerce.date().nullish(),
+  "estimatedMinutes": zod.number().nullish(),
   "equipmentRequired": zod.boolean().optional(),
-  "contractorRequired": zod.boolean().optional(),
-  "completionNote": zod.string().optional(),
-  "waitingReason": zod.string().optional(),
-  "cancellationReason": zod.string().optional()
+  "contractorRequired": zod.boolean().optional()
 })
 
 export const UpdateActionResponse = zod.object({
@@ -949,7 +1038,8 @@ export const UpdateActionStatusResponse = zod.object({
 export const CreateNoteBody = zod.object({
   "body": zod.string(),
   "observationId": zod.number().optional(),
-  "actionId": zod.number().optional()
+  "actionId": zod.number().optional(),
+  "offlineId": zod.string().optional()
 })
 
 export const CreateNoteResponse = zod.object({
@@ -957,6 +1047,7 @@ export const CreateNoteResponse = zod.object({
   "body": zod.string(),
   "observationId": zod.number().nullish(),
   "actionId": zod.number().nullish(),
+  "offlineId": zod.string().nullish(),
   "createdByUserId": zod.number(),
   "createdByName": zod.string().nullish(),
   "createdAt": zod.string()
@@ -1034,6 +1125,17 @@ export const GetReportSummaryResponse = zod.object({
   "colour": zod.string().nullish()
 })).optional()
 })
+
+
+/**
+ * @summary Export observations for a date range as CSV
+ */
+export const ExportReportCsvQueryParams = zod.object({
+  "dateFrom": zod.date(),
+  "dateTo": zod.date()
+})
+
+export const ExportReportCsvResponse = zod.unknown()
 
 
 /**

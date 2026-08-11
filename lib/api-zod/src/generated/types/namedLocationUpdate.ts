@@ -8,8 +8,11 @@
 
 export interface NamedLocationUpdate {
   name?: string;
-  description?: string;
-  latitude?: number;
-  longitude?: number;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
   active?: boolean;
 }

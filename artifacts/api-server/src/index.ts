@@ -1,6 +1,6 @@
 import app from "./app";
 import { logger } from "./lib/logger";
-import { runOneTimeResetIfNeeded } from "./lib/oneTimeReset";
+import { runMigrations } from "./lib/migrations";
 
 const rawPort = process.env["PORT"];
 
@@ -16,7 +16,7 @@ if (Number.isNaN(port) || port <= 0) {
   throw new Error(`Invalid PORT value: "${rawPort}"`);
 }
 
-runOneTimeResetIfNeeded().then(() => {
+runMigrations().then(() => {
   app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
@@ -25,4 +25,7 @@ runOneTimeResetIfNeeded().then(() => {
 
     logger.info({ port }, "Server listening");
   });
+}).catch((error) => {
+  logger.fatal({ err: error }, "Server startup aborted");
+  process.exit(1);
 });

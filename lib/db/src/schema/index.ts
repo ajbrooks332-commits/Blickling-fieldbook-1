@@ -8,3 +8,6 @@ export * from "./notes";
 export * from "./audit-events";
 export * from "./observation-images";
 export * from "./action-images";
+export * from "./app-settings";
+export * from "./upload-grants";
+export * from "./reference-counters";

@@ -5,6 +5,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useQueryClient } from "@tanstack/react-query"
 import { getGetMeQueryKey } from "@workspace/api-client-react"
 import { Loader2 } from "lucide-react"
+import { clearPrivateCache } from "@/lib/offline"
 
 const C = {
   bg: "#0d1117",
@@ -21,8 +22,8 @@ const C = {
 }
 
 export default function Login() {
-  const [email, setEmail] = React.useState("admin@blickling.nt")
-  const [password, setPassword] = React.useState("admin123")
+  const [email, setEmail] = React.useState("")
+  const [password, setPassword] = React.useState("")
   const login = useLogin()
   const [, setLocation] = useLocation()
   const { toast } = useToast()
@@ -33,7 +34,9 @@ export default function Login() {
     login.mutate(
       { data: { email, password } },
       {
-        onSuccess: (data) => {
+        onSuccess: async (data) => {
+          await clearPrivateCache()
+          queryClient.clear()
           queryClient.setQueryData(getGetMeQueryKey(), data)
           setLocation("/")
         },
@@ -125,10 +128,11 @@ export default function Login() {
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
+              <label htmlFor="login-email" className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
                 Email
               </label>
               <input
+                id="login-email"
                 type="email"
                 value={email}
                 onChange={e => setEmail(e.target.value)}
@@ -147,10 +151,11 @@ export default function Login() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
+              <label htmlFor="login-password" className="text-xs font-semibold uppercase tracking-wider" style={{ color: C.muted }}>
                 Password
               </label>
               <input
+                id="login-password"
                 type="password"
                 value={password}
                 onChange={e => setPassword(e.target.value)}

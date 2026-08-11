@@ -1,11 +1,12 @@
 import React from "react"
-import { useGetMyActions, useUpdateActionStatus, getGetMyActionsQueryKey } from "@workspace/api-client-react"
+import { useGetMe, useGetMyActions, useUpdateActionStatus, getGetMyActionsQueryKey } from "@workspace/api-client-react"
 import { AlertTriangle, Clock, PlayCircle, CheckCircle2, ArrowUp, ArrowDown, Minus, MapPin } from "lucide-react"
 import { Link } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 import { useQueryClient } from "@tanstack/react-query"
 import { Action } from "@workspace/api-client-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { queueStatusUpdate } from "@/lib/offline"
 
 const C = {
   bg: "#0d1117",
@@ -74,14 +75,18 @@ const PriorityIcon = ({ p }: { p: string }) => {
 }
 
 export default function MyActions() {
-  const { data: myActions, isLoading } = useGetMyActions()
+  const { data: myActions, isLoading, error: loadError } = useGetMyActions()
   const updateStatus = useUpdateActionStatus()
+  const { data: me } = useGetMe()
   const queryClient = useQueryClient()
 
   const [completeActionId, setCompleteActionId] = React.useState<number | null>(null)
   const [completionNote, setCompletionNote] = React.useState("")
+  const [waitingActionId, setWaitingActionId] = React.useState<number | null>(null)
+  const [waitingReason, setWaitingReason] = React.useState("")
+  const [requestError, setRequestError] = React.useState<string | null>(null)
 
-  if (isLoading || !myActions) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center gap-1 p-12">
         {[0, 150, 300].map(delay => (
@@ -90,27 +95,51 @@ export default function MyActions() {
       </div>
     )
   }
+  if (loadError || !myActions) return <div role="alert" className="rounded-md border border-destructive/30 p-4">Your actions could not be loaded.</div>
 
-  const handleStatusChange = (id: number, status: 'in_progress' | 'waiting') => {
-    updateStatus.mutate(
-      { id, data: { status } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getGetMyActionsQueryKey() }) }
-    )
+  const submitStatus = async (id: number, payload: Record<string, unknown>) => {
+    setRequestError(null)
+    if (!me) { setRequestError("Your session could not be verified. Reload the app and try again."); return false }
+    const queue = async () => {
+      try {
+        await queueStatusUpdate("actions", id, payload, me.id)
+        setRequestError("Status change queued and will sync when the connection returns.")
+        return true
+      } catch {
+        setRequestError("The status change could not be saved on this device.")
+        return false
+      }
+    }
+    if (!navigator.onLine) return queue()
+    try {
+      await updateStatus.mutateAsync({ id, data: payload as any })
+      await queryClient.invalidateQueries({ queryKey: getGetMyActionsQueryKey() })
+      return true
+    } catch (error) {
+      if (error instanceof TypeError) return queue()
+      setRequestError(error instanceof Error ? error.message : "Status could not be updated.")
+      return false
+    }
   }
 
-  const handleComplete = (e: React.FormEvent) => {
+  const handleStatusChange = async (id: number, status: 'in_progress') => {
+    await submitStatus(id, { status })
+  }
+
+  const handleWaiting = async (event: React.FormEvent) => {
+    event.preventDefault()
+    if (!waitingActionId || !waitingReason.trim()) return
+    if (await submitStatus(waitingActionId, { status: "waiting", waitingReason: waitingReason.trim() })) {
+      setWaitingActionId(null); setWaitingReason("")
+    }
+  }
+
+  const handleComplete = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!completeActionId) return
-    updateStatus.mutate(
-      { id: completeActionId, data: { status: 'completed', completionNote } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetMyActionsQueryKey() })
-          setCompleteActionId(null)
-          setCompletionNote("")
-        }
-      }
-    )
+    if (!completeActionId || !completionNote.trim()) return
+    if (await submitStatus(completeActionId, { status: "completed", completionNote: completionNote.trim() })) {
+      setCompleteActionId(null); setCompletionNote("")
+    }
   }
 
   const renderActionList = (actions: Action[], title: string, isOverdue = false) => {
@@ -230,17 +259,12 @@ export default function MyActions() {
                         </span>
                       )}
                       {action.observationRef && (
-                        <Link
-                          href={`/observations/${action.observationId}`}
-                          onClick={(e) => e.stopPropagation()}
-                        >
                           <span
                             className="transition-colors"
-                            style={{ ...BODY, fontSize: 11, color: C.emerald, cursor: "pointer" }}
+                            style={{ ...BODY, fontSize: 11, color: C.emerald }}
                           >
                             ↗ {action.observationRef}
                           </span>
-                        </Link>
                       )}
                       {action.namedLocationName && (
                         <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 11, color: C.muted }}>
@@ -303,7 +327,7 @@ export default function MyActions() {
                         <CheckCircle2 className="w-3.5 h-3.5" /> Done
                       </button>
                       <button
-                        onClick={() => handleStatusChange(action.id, 'waiting')}
+                        onClick={() => { setWaitingActionId(action.id); setWaitingReason("") }}
                         style={{
                           ...BODY,
                           fontSize: 11,
@@ -375,26 +399,8 @@ export default function MyActions() {
           <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>My Actions</h1>
           <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Assigned to you</p>
         </div>
-        <Link href="/actions/new">
-          <button
-            style={{
-              ...HEAD,
-              fontSize: 13,
-              fontWeight: 600,
-              color: "#fff",
-              background: C.emerald,
-              border: "none",
-              borderRadius: "0.625rem",
-              padding: "8px 16px",
-              cursor: "pointer",
-            }}
-            onMouseEnter={e => (e.currentTarget.style.background = C.emeraldDark)}
-            onMouseLeave={e => (e.currentTarget.style.background = C.emerald)}
-          >
-            Add Action
-          </button>
-        </Link>
       </div>
+      {requestError && <p role="alert" className="mb-4 text-sm text-red-400">{requestError}</p>}
 
       {/* Empty state */}
       {allEmpty && (
@@ -446,8 +452,9 @@ export default function MyActions() {
           </DialogHeader>
           <form onSubmit={handleComplete} className="space-y-4 pt-2">
             <div className="space-y-2">
-              <label style={{ ...BODY, fontSize: 13, color: C.muted }}>Completion note (optional)</label>
+              <label htmlFor="completion-note" style={{ ...BODY, fontSize: 13, color: C.muted }}>Completion note (required)</label>
               <input
+                id="completion-note"
                 style={{
                   ...BODY,
                   width: "100%",
@@ -464,6 +471,7 @@ export default function MyActions() {
                 onChange={(e) => setCompletionNote(e.target.value)}
                 onFocus={e => (e.target.style.borderColor = C.emerald)}
                 onBlur={e => (e.target.style.borderColor = C.border)}
+                required
               />
             </div>
             <DialogFooter>
@@ -476,7 +484,7 @@ export default function MyActions() {
               </button>
               <button
                 type="submit"
-                disabled={updateStatus.isPending}
+                disabled={updateStatus.isPending || !completionNote.trim()}
                 style={{
                   ...HEAD,
                   fontSize: 13,
@@ -492,6 +500,19 @@ export default function MyActions() {
                 {updateStatus.isPending ? "Saving…" : "Mark Complete"}
               </button>
             </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!waitingActionId} onOpenChange={(open) => { if (!open) { setWaitingActionId(null); setWaitingReason("") } }}>
+        <DialogContent style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text }}>
+          <DialogHeader><DialogTitle style={{ ...HEAD, color: C.text }}>Pause Action</DialogTitle></DialogHeader>
+          <form onSubmit={handleWaiting} className="space-y-4 pt-2">
+            <div className="space-y-2"><label htmlFor="waiting-reason" style={{ ...BODY, fontSize: 13, color: C.muted }}>Reason for waiting (required)</label>
+              <input id="waiting-reason" required value={waitingReason} onChange={(event) => setWaitingReason(event.target.value)}
+                className="w-full rounded-md border bg-background px-3 py-2" maxLength={2000} /></div>
+            <DialogFooter><button type="button" onClick={() => setWaitingActionId(null)} className="rounded-md border px-4 py-2">Cancel</button>
+              <button type="submit" disabled={updateStatus.isPending || !waitingReason.trim()} className="rounded-md bg-primary px-4 py-2 text-primary-foreground disabled:opacity-60">{updateStatus.isPending ? "Saving…" : "Pause Action"}</button></DialogFooter>
           </form>
         </DialogContent>
       </Dialog>

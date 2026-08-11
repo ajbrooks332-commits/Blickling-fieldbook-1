@@ -4,12 +4,13 @@ import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 
 interface PhotoGalleryProps {
-  images: Array<{ id: number; storageKey: string; originalFilename: string; caption?: string | null; mimeType: string }>
-  onDelete?: (imageId: number) => void
+  images: Array<{ id: number; storageKey: string; originalFilename: string; caption?: string | null; mimeType: string; uploadedByUserId?: number }>
+  onDelete?: (imageId: number) => void | Promise<void>
   editable?: boolean
+  canDelete?: (image: PhotoGalleryProps["images"][number]) => boolean
 }
 
-export default function PhotoGallery({ images, onDelete, editable }: PhotoGalleryProps) {
+export default function PhotoGallery({ images, onDelete, editable, canDelete }: PhotoGalleryProps) {
   const [lightbox, setLightbox] = useState<{ storageKey: string; caption?: string | null } | null>(null)
 
   if (images.length === 0) {
@@ -30,17 +31,16 @@ export default function PhotoGallery({ images, onDelete, editable }: PhotoGaller
           const src = `/api/storage${img.storageKey}`
           return (
             <div key={img.id} className="relative group rounded-lg overflow-hidden border bg-muted">
-              <img
-                src={src}
-                alt={img.caption || img.originalFilename}
-                className="w-full aspect-square object-cover cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => setLightbox({ storageKey: img.storageKey, caption: img.caption })}
-              />
-              {editable && onDelete && (
+              <button type="button" className="block w-full" onClick={() => setLightbox({ storageKey: img.storageKey, caption: img.caption })}
+                aria-label={`Open ${img.caption || img.originalFilename}`}>
+                <img src={src} alt={img.caption || img.originalFilename}
+                  className="w-full aspect-square object-cover hover:opacity-90 transition-opacity" loading="lazy" />
+              </button>
+              {editable && onDelete && (!canDelete || canDelete(img)) && (
                 <button
-                  onClick={(e) => { e.stopPropagation(); onDelete(img.id) }}
-                  className="absolute top-1 right-1 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                  aria-label="Delete photo"
+                  type="button" onClick={(e) => { e.stopPropagation(); void onDelete(img.id) }}
+                  className="absolute top-1 right-1 bg-black/70 hover:bg-black/90 text-white rounded-full p-1.5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                  aria-label={`Delete ${img.caption || img.originalFilename}`}
                 >
                   <X className="w-3 h-3" />
                 </button>

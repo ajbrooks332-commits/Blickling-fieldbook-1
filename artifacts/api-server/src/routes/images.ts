@@ -1,135 +1,149 @@
 import { Router } from "express";
-import { db, observationImagesTable, actionImagesTable, auditEventsTable, observationsTable, actionsTable } from "@workspace/db";
-import { eq, and } from "drizzle-orm";
-import { requireAuth } from "../lib/auth";
-import { ObjectStorageService } from "../lib/objectStorage";
+import { and, eq, isNull } from "drizzle-orm";
+import { z } from "zod";
+import {
+  actionImagesTable, actionsTable, auditEventsTable, db, observationImagesTable, observationsTable,
+} from "@workspace/db";
+import { canUpdateAction, isManager, requireAuth } from "../lib/auth";
+import { idSchema, validationError } from "../lib/validation";
+import { consumeUploadGrant, storage } from "./storage";
 
 const router = Router();
-const storage = new ObjectStorageService();
+const imageInput = z.object({
+  storageKey: z.string().regex(/^\/objects\/uploads\/[0-9a-f-]{36}$/i),
+  originalFilename: z.string().trim().min(1).max(180),
+  mimeType: z.string().max(80),
+  fileSize: z.number().int().positive().max(10 * 1024 * 1024),
+  caption: z.string().trim().max(1000).optional().nullable(),
+  imageType: z.enum(["observation", "progress", "completion"]).optional(),
+}).strict();
 
-// ─── Observation Images ──────────────────────────────────────────────────────
-
-// GET /observations/:id/images
 router.get("/observations/:id/images", requireAuth, async (req, res) => {
-  const observationId = Number(req.params.id);
-  const images = await db
-    .select()
-    .from(observationImagesTable)
-    .where(eq(observationImagesTable.observationId, observationId))
-    .orderBy(observationImagesTable.createdAt);
-  res.json(images);
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const propertyId = req.authUser!.propertyId!;
+  const [observation] = await db.select({ id: observationsTable.id }).from(observationsTable)
+    .where(and(eq(observationsTable.id, id.data), eq(observationsTable.propertyId, propertyId), isNull(observationsTable.deletedAt))).limit(1);
+  if (!observation) return void res.status(404).json({ error: "Observation not found" });
+  const rows = await db.select().from(observationImagesTable)
+    .where(eq(observationImagesTable.observationId, id.data)).orderBy(observationImagesTable.createdAt);
+  res.json(rows);
 });
 
-// POST /observations/:id/images
 router.post("/observations/:id/images", requireAuth, async (req, res) => {
-  const observationId = Number(req.params.id);
-  const { storageKey, originalFilename, mimeType, fileSize, caption, imageType } = req.body;
-
-  if (!storageKey || !originalFilename || !mimeType || !fileSize) {
-    res.status(400).json({ error: "storageKey, originalFilename, mimeType and fileSize are required" });
-    return;
+  const id = idSchema.safeParse(req.params.id);
+  const parsed = imageInput.safeParse(req.body);
+  if (!id.success || !parsed.success) return validationError(res, !id.success ? id.error : parsed.error);
+  const user = req.authUser!;
+  const [observation] = await db.select({ id: observationsTable.id, propertyId: observationsTable.propertyId }).from(observationsTable)
+    .where(and(eq(observationsTable.id, id.data), eq(observationsTable.propertyId, user.propertyId!), isNull(observationsTable.deletedAt))).limit(1);
+  if (!observation) return void res.status(404).json({ error: "Observation not found" });
+  let normalised;
+  try {
+    normalised = await consumeUploadGrant(parsed.data.storageKey, user.id, user.propertyId!);
+  } catch (error) {
+    if (error instanceof Error && error.message === "UPLOAD_GRANT_INVALID") {
+      return void res.status(400).json({ error: "Upload is missing, expired, already used, or belongs to another user" });
+    }
+    throw error;
   }
-
-  const [obs] = await db.select({ propertyId: observationsTable.propertyId })
-    .from(observationsTable).where(eq(observationsTable.id, observationId)).limit(1);
-  if (!obs) { res.status(404).json({ error: "Observation not found" }); return; }
-
-  const [image] = await db.insert(observationImagesTable).values({
-    observationId,
-    storageKey,
-    originalFilename,
-    mimeType,
-    fileSize: Number(fileSize),
-    caption: caption || null,
-    imageType: imageType || "observation",
-    uploadedByUserId: req.session.userId!,
-  }).returning();
-
-  await db.insert(auditEventsTable).values({
-    propertyId: obs.propertyId,
-    observationId,
-    userId: req.session.userId!,
-    eventType: "photo_added",
-    newValue: originalFilename,
+  const image = await db.transaction(async (tx) => {
+    const [created] = await tx.insert(observationImagesTable).values({
+      observationId: id.data,
+      storageKey: parsed.data.storageKey,
+      originalFilename: normalised.originalFilename,
+      mimeType: normalised.mimeType,
+      fileSize: normalised.fileSize,
+      caption: parsed.data.caption ?? null,
+      imageType: parsed.data.imageType ?? "observation",
+      uploadedByUserId: user.id,
+    }).returning();
+    await tx.insert(auditEventsTable).values({
+      propertyId: user.propertyId!, observationId: id.data, userId: user.id,
+      eventType: "photo_added", newValue: normalised.originalFilename,
+    });
+    return created;
   });
-
   res.status(201).json(image);
 });
 
-// DELETE /observations/:id/images/:imageId
 router.delete("/observations/:id/images/:imageId", requireAuth, async (req, res) => {
-  const observationId = Number(req.params.id);
-  const imageId = Number(req.params.imageId);
-
-  const [image] = await db.select().from(observationImagesTable)
-    .where(and(eq(observationImagesTable.id, imageId), eq(observationImagesTable.observationId, observationId)))
-    .limit(1);
-  if (!image) { res.status(404).json({ error: "Image not found" }); return; }
-
-  await db.delete(observationImagesTable).where(eq(observationImagesTable.id, imageId));
+  const id = idSchema.safeParse(req.params.id);
+  const imageId = idSchema.safeParse(req.params.imageId);
+  if (!id.success || !imageId.success) return validationError(res, !id.success ? id.error : imageId.error);
+  const user = req.authUser!;
+  const [row] = await db.select({ image: observationImagesTable, propertyId: observationsTable.propertyId })
+    .from(observationImagesTable).innerJoin(observationsTable, eq(observationImagesTable.observationId, observationsTable.id))
+    .where(and(eq(observationImagesTable.id, imageId.data), eq(observationImagesTable.observationId, id.data),
+      eq(observationsTable.propertyId, user.propertyId!), isNull(observationsTable.deletedAt))).limit(1);
+  if (!row) return void res.status(404).json({ error: "Image not found" });
+  if (!isManager(user) && row.image.uploadedByUserId !== user.id) return void res.status(403).json({ error: "Insufficient permissions" });
+  await storage.deleteObjectEntity(row.image.storageKey);
+  await db.transaction(async (tx) => {
+    await tx.delete(observationImagesTable).where(eq(observationImagesTable.id, imageId.data));
+    await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, observationId: id.data, userId: user.id,
+      eventType: "photo_removed", previousValue: row.image.originalFilename });
+  });
   res.status(204).send();
 });
 
-// ─── Action Images ───────────────────────────────────────────────────────────
-
-// GET /actions/:id/images
 router.get("/actions/:id/images", requireAuth, async (req, res) => {
-  const actionId = Number(req.params.id);
-  const images = await db
-    .select()
-    .from(actionImagesTable)
-    .where(eq(actionImagesTable.actionId, actionId))
-    .orderBy(actionImagesTable.createdAt);
-  res.json(images);
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const [action] = await db.select({ id: actionsTable.id }).from(actionsTable)
+    .where(and(eq(actionsTable.id, id.data), eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
+  if (!action) return void res.status(404).json({ error: "Action not found" });
+  res.json(await db.select().from(actionImagesTable).where(eq(actionImagesTable.actionId, id.data)).orderBy(actionImagesTable.createdAt));
 });
 
-// POST /actions/:id/images
 router.post("/actions/:id/images", requireAuth, async (req, res) => {
-  const actionId = Number(req.params.id);
-  const { storageKey, originalFilename, mimeType, fileSize, caption } = req.body;
-
-  if (!storageKey || !originalFilename || !mimeType || !fileSize) {
-    res.status(400).json({ error: "storageKey, originalFilename, mimeType and fileSize are required" });
-    return;
+  const id = idSchema.safeParse(req.params.id);
+  const parsed = imageInput.omit({ imageType: true }).safeParse(req.body);
+  if (!id.success || !parsed.success) return validationError(res, !id.success ? id.error : parsed.error);
+  const user = req.authUser!;
+  const [action] = await db.select().from(actionsTable).where(and(eq(actionsTable.id, id.data),
+    eq(actionsTable.propertyId, user.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
+  if (!action) return void res.status(404).json({ error: "Action not found" });
+  if (!canUpdateAction(user, action.assignedToUserId)) return void res.status(403).json({ error: "Only the assignee or a manager may add action photos" });
+  let normalised;
+  try {
+    normalised = await consumeUploadGrant(parsed.data.storageKey, user.id, user.propertyId!);
+  } catch (error) {
+    if (error instanceof Error && error.message === "UPLOAD_GRANT_INVALID") {
+      return void res.status(400).json({ error: "Upload is missing, expired, already used, or belongs to another user" });
+    }
+    throw error;
   }
-
-  const [action] = await db.select({ propertyId: actionsTable.propertyId, observationId: actionsTable.observationId })
-    .from(actionsTable).where(eq(actionsTable.id, actionId)).limit(1);
-  if (!action) { res.status(404).json({ error: "Action not found" }); return; }
-
-  const [image] = await db.insert(actionImagesTable).values({
-    actionId,
-    storageKey,
-    originalFilename,
-    mimeType,
-    fileSize: Number(fileSize),
-    caption: caption || null,
-    uploadedByUserId: req.session.userId!,
-  }).returning();
-
-  await db.insert(auditEventsTable).values({
-    propertyId: action.propertyId,
-    actionId,
-    observationId: action.observationId,
-    userId: req.session.userId!,
-    eventType: "photo_added",
-    newValue: originalFilename,
+  const image = await db.transaction(async (tx) => {
+    const [created] = await tx.insert(actionImagesTable).values({ actionId: id.data, storageKey: parsed.data.storageKey,
+      originalFilename: normalised.originalFilename, mimeType: normalised.mimeType, fileSize: normalised.fileSize,
+      caption: parsed.data.caption ?? null, uploadedByUserId: user.id }).returning();
+    await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, actionId: id.data,
+      observationId: action.observationId, userId: user.id, eventType: "photo_added", newValue: normalised.originalFilename });
+    return created;
   });
-
   res.status(201).json(image);
 });
 
-// DELETE /actions/:id/images/:imageId
 router.delete("/actions/:id/images/:imageId", requireAuth, async (req, res) => {
-  const actionId = Number(req.params.id);
-  const imageId = Number(req.params.imageId);
-
-  const [image] = await db.select().from(actionImagesTable)
-    .where(and(eq(actionImagesTable.id, imageId), eq(actionImagesTable.actionId, actionId)))
-    .limit(1);
-  if (!image) { res.status(404).json({ error: "Image not found" }); return; }
-
-  await db.delete(actionImagesTable).where(eq(actionImagesTable.id, imageId));
+  const id = idSchema.safeParse(req.params.id);
+  const imageId = idSchema.safeParse(req.params.imageId);
+  if (!id.success || !imageId.success) return validationError(res, !id.success ? id.error : imageId.error);
+  const user = req.authUser!;
+  const [row] = await db.select({ image: actionImagesTable, action: actionsTable }).from(actionImagesTable)
+    .innerJoin(actionsTable, eq(actionImagesTable.actionId, actionsTable.id))
+    .where(and(eq(actionImagesTable.id, imageId.data), eq(actionImagesTable.actionId, id.data),
+      eq(actionsTable.propertyId, user.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
+  if (!row) return void res.status(404).json({ error: "Image not found" });
+  if (!canUpdateAction(user, row.action.assignedToUserId) || (!isManager(user) && row.image.uploadedByUserId !== user.id)) {
+    return void res.status(403).json({ error: "Insufficient permissions" });
+  }
+  await storage.deleteObjectEntity(row.image.storageKey);
+  await db.transaction(async (tx) => {
+    await tx.delete(actionImagesTable).where(eq(actionImagesTable.id, imageId.data));
+    await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, actionId: id.data,
+      observationId: row.action.observationId, userId: user.id, eventType: "photo_removed", previousValue: row.image.originalFilename });
+  });
   res.status(204).send();
 });
 

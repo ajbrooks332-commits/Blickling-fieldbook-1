@@ -10,4 +10,5 @@ export interface NoteInput {
   body: string;
   observationId?: number;
   actionId?: number;
+  offlineId?: string;
 }

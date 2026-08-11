@@ -36,6 +36,8 @@ export const observationsTable = pgTable("observations", {
   syncedAt: timestamp("synced_at"),
   resolvedAt: timestamp("resolved_at"),
   closedAt: timestamp("closed_at"),
+  deletedAt: timestamp("deleted_at"),
+  deletedByUserId: integer("deleted_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });

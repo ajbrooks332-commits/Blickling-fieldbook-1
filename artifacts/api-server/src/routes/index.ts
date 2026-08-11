@@ -11,13 +11,14 @@ import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
 import storageRouter from "./storage";
 import imagesRouter from "./images";
-import resetRouter from "./reset";
+import { requireAuth, requirePasswordChanged } from "../lib/auth";
 
 const router: IRouter = Router();
 
 router.use(healthRouter);
-router.use(storageRouter);
 router.use("/auth", authRouter);
+router.use(requireAuth, requirePasswordChanged);
+router.use(storageRouter);
 router.use(usersRouter);
 router.use(categoriesRouter);
 router.use("/locations", locationsRouter);
@@ -27,6 +28,5 @@ router.use("/notes", notesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/reports", reportsRouter);
 router.use(imagesRouter);
-router.use(resetRouter);
 
 export default router;

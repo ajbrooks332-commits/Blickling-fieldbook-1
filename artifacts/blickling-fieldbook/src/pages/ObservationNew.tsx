@@ -1,19 +1,23 @@
 import React, { useState, useEffect, useRef } from "react"
-import { useCreateObservation, useListCategories, useListLocations } from "@workspace/api-client-react"
+import { useCreateObservation, useGetMe, useListCategories, useListLocations } from "@workspace/api-client-react"
 import { useLocation } from "wouter"
 import { ChevronRight, ChevronLeft, MapPin, Camera, Save, Check } from "lucide-react"
-import PhotoUpload from "@/components/PhotoUpload"
+import PhotoUpload, { type PhotoUploadResult } from "@/components/PhotoUpload"
 import PhotoGallery from "@/components/PhotoGallery"
 import { MapContainer, TileLayer, Marker, useMapEvents } from "react-leaflet"
 import "leaflet/dist/leaflet.css"
 import L from "leaflet"
+import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png'
+import markerIcon from 'leaflet/dist/images/marker-icon.png'
+import markerShadow from 'leaflet/dist/images/marker-shadow.png'
+import { queueObservation, queuePhoto, uploadPhoto, type OfflinePhoto } from "@/lib/offline"
 
 // Fix leaflet default marker icons
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
-  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
-  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+  iconRetinaUrl: markerIcon2x,
+  iconUrl: markerIcon,
+  shadowUrl: markerShadow,
 })
 
 const C = {
@@ -68,12 +72,7 @@ function MapPinHandler({ onPin }: { onPin: (lat: number, lng: number) => void })
   return null
 }
 
-interface PendingPhoto {
-  storageKey: string
-  originalFilename: string
-  mimeType: string
-  fileSize: number
-}
+type PendingPhoto = PhotoUploadResult
 
 const inputStyle: React.CSSProperties = {
   background: C.bg,
@@ -98,9 +97,15 @@ const labelStyle: React.CSSProperties = {
 
 const STEP_LABELS = ["Location", "Category", "Details", "Photos", "Review"]
 
+function localDateTimeNow() {
+  const now = new Date()
+  return new Date(now.getTime() - now.getTimezoneOffset() * 60_000).toISOString().slice(0, 16)
+}
+
 export default function ObservationNew() {
   const [, setLocation] = useLocation()
   const createObservation = useCreateObservation()
+  const { data: me } = useGetMe()
   const { data: categories } = useListCategories()
   const { data: locations } = useListLocations()
 
@@ -110,7 +115,7 @@ export default function ObservationNew() {
     description: "",
     categoryId: "",
     priority: "normal" as any,
-    observedAt: new Date().toISOString().slice(0,16),
+    observedAt: localDateTimeNow(),
     latitude: null as number | null,
     longitude: null as number | null,
     gpsAccuracy: null as number | null,
@@ -122,11 +127,15 @@ export default function ObservationNew() {
   })
 
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>()
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
+  const [locationError, setLocationError] = useState<string | null>(null)
 
   const handleNext = () => setStep(s => Math.min(s + 1, 5))
   const handlePrev = () => setStep(s => Math.max(s - 1, 1))
 
   const handleGetLocation = () => {
+    setLocationError(null)
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition((pos) => {
         setFormData(d => ({
@@ -135,60 +144,83 @@ export default function ObservationNew() {
           longitude: pos.coords.longitude,
           gpsAccuracy: pos.coords.accuracy ?? null,
         }))
-      })
-    }
+      }, (error) => setLocationError(error.code === error.PERMISSION_DENIED
+        ? "Location permission was denied. Drop a pin or choose a named area instead."
+        : "Your location could not be determined. Drop a pin or choose a named area instead."),
+      { enableHighAccuracy: true, timeout: 15_000, maximumAge: 30_000 })
+    } else setLocationError("This device does not provide location services. Drop a pin or choose a named area instead.")
   }
 
   const handlePhotoUploaded = (image: PendingPhoto) => {
     setPendingPhotos(prev => [...(prev || []), image])
   }
 
-  const handleSubmit = (status: 'draft' | 'submitted') => {
-    createObservation.mutate(
-      {
-        data: {
-          title: formData.title,
-          description: formData.description,
-          categoryId: Number(formData.categoryId),
-          priority: formData.priority,
-          observedAt: new Date(formData.observedAt).toISOString(),
-          status,
-          latitude: formData.latitude || undefined,
-          longitude: formData.longitude || undefined,
-          namedLocationId: formData.namedLocationId ? Number(formData.namedLocationId) : undefined,
-          safetyIssue: formData.safetyIssue,
-          publicAccessAffected: formData.publicAccessAffected,
-          machineryRequired: formData.machineryRequired,
-          followUpRequired: formData.followUpRequired
-        }
-      },
-      {
-        onSuccess: async (data) => {
-          for (const photo of (pendingPhotos || [])) {
-            await fetch(`/api/observations/${data.id}/images`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ ...photo, imageType: 'observation' })
-            })
-          }
-          setLocation(`/observations/${data.id}`)
+  const handleSubmit = async (status: 'draft' | 'submitted') => {
+    if (submitting) return
+    if (!me) { setSubmitError("Your session could not be verified. Reload the app and try again."); return }
+    setSubmitting(true)
+    setSubmitError(null)
+    const offlineId = crypto.randomUUID()
+    const payload = {
+      title: formData.title,
+      description: formData.description,
+      categoryId: Number(formData.categoryId),
+      priority: formData.priority,
+      observedAt: new Date(formData.observedAt).toISOString(),
+      status,
+      latitude: formData.latitude ?? undefined,
+      longitude: formData.longitude ?? undefined,
+      gpsAccuracyMetres: formData.gpsAccuracy ?? undefined,
+      namedLocationId: formData.namedLocationId ? Number(formData.namedLocationId) : undefined,
+      safetyIssue: formData.safetyIssue,
+      publicAccessAffected: formData.publicAccessAffected,
+      machineryRequired: formData.machineryRequired,
+      followUpRequired: formData.followUpRequired,
+      offlineId,
+      createdOffline: !navigator.onLine,
+    }
+    const photos = (pendingPhotos ?? []).filter((photo): photo is PendingPhoto & { blob: Blob } => Boolean(photo.blob))
+      .map(({ blob, originalFilename, mimeType, fileSize }) => ({ blob, originalFilename, mimeType, fileSize } satisfies OfflinePhoto))
+    if (!navigator.onLine) {
+      try {
+        await queueObservation(payload, me.id, photos)
+        setLocation("/observations?queued=1")
+      } catch {
+        setSubmitError("The observation could not be saved on this device.")
+        setSubmitting(false)
+      }
+      return
+    }
+    try {
+      const created = await createObservation.mutateAsync({ data: payload })
+      let photoUploadFailed = false
+      for (const photo of photos) {
+        try {
+          await uploadPhoto("observations", created.id, photo)
+        } catch {
+          try { await queuePhoto("observations", created.id, photo, me.id) }
+          catch { photoUploadFailed = true }
         }
       }
-    )
+      setLocation(`/observations/${created.id}${photoUploadFailed ? "?photoUploadFailed=1" : ""}`)
+    } catch (error) {
+      if (error instanceof TypeError) {
+        try {
+          await queueObservation({ ...payload, createdOffline: true }, me.id, photos)
+          setLocation("/observations?queued=1")
+          return
+        } catch {
+          setSubmitError("The connection failed and the observation could not be queued.")
+        }
+      } else setSubmitError(error instanceof Error ? error.message : "The observation could not be saved.")
+      setSubmitting(false)
+    }
   }
 
   const canProceed = () => {
     if (step === 2) return formData.title.trim().length > 0 && formData.categoryId
     return true
   }
-
-  const pendingGalleryItems = (pendingPhotos || []).map((p, i) => ({
-    id: i,
-    storageKey: p.storageKey,
-    originalFilename: p.originalFilename,
-    mimeType: p.mimeType,
-    caption: null,
-  }))
 
   // Pin-on-map state
   const [locationMode, setLocationMode] = useState<"gps" | "pin" | null>(null)
@@ -332,6 +364,7 @@ export default function ObservationNew() {
                 </div>
                 {locationMode === "gps" && formData.latitude && <Check size={18} color={C.emerald} strokeWidth={2.5} />}
               </button>
+              {locationError && <p role="alert" style={{ ...BODY, color: C.high, fontSize: 12, margin: "-4px 0 0" }}>{locationError}</p>}
 
               {/* ── Option B: Drop a pin ── */}
               <button
@@ -465,7 +498,7 @@ export default function ObservationNew() {
                   onChange={e => setFormData(d => ({ ...d, namedLocationId: e.target.value }))}
                 >
                   <option value="" style={{ background: C.bg, color: C.dim }}>-- Select area --</option>
-                  {locations?.map(l => <option key={l.id} value={l.id} style={{ background: C.bg, color: C.text }}>{l.name}</option>)}
+                  {locations?.filter((location) => location.active).map(l => <option key={l.id} value={l.id} style={{ background: C.bg, color: C.text }}>{l.name}</option>)}
                 </select>
               </div>
 
@@ -483,7 +516,7 @@ export default function ObservationNew() {
               <div>
                 <label style={labelStyle}>Category <span style={{ color: C.urgent }}>*</span></label>
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                  {categories?.map(c => {
+                  {categories?.filter((category) => category.active).map(c => {
                     const selected = formData.categoryId === String(c.id)
                     return (
                       <button
@@ -649,6 +682,7 @@ export default function ObservationNew() {
               <PhotoUpload
                 onUploaded={handlePhotoUploaded}
                 label="Take / Add Photo"
+                deferUpload
               />
 
               {(pendingPhotos && pendingPhotos.length > 0) ? (
@@ -660,7 +694,7 @@ export default function ObservationNew() {
                     {pendingPhotos.map((p, i) => (
                       <div key={i} style={{ position: "relative", borderRadius: "0.5rem", overflow: "hidden", border: `1px solid ${C.border}`, background: C.bg, aspectRatio: "1" }}>
                         <img
-                          src={`/api/storage${p.storageKey}`}
+                          src={p.previewUrl ?? (p.storageKey ? `/api/storage${p.storageKey}` : "")}
                           alt={p.originalFilename}
                           style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
                         />
@@ -791,22 +825,23 @@ export default function ObservationNew() {
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {submitError && <p role="alert" style={{ ...BODY, color: C.urgent, fontSize: 13, margin: 0 }}>{submitError}</p>}
               <button
                 onClick={() => handleSubmit('submitted')}
-                disabled={createObservation.isPending}
+                disabled={submitting}
                 onMouseEnter={() => setSubmitBtnHover(true)}
                 onMouseLeave={() => setSubmitBtnHover(false)}
                 style={{
                   width: "100%",
                   height: 48,
-                  background: createObservation.isPending ? C.emeraldDim : submitBtnHover ? C.emeraldDark : C.emerald,
+                  background: submitting ? C.emeraldDim : submitBtnHover ? C.emeraldDark : C.emerald,
                   border: "none",
                   borderRadius: "0.625rem",
                   color: "#fff",
                   ...HEAD,
                   fontSize: 15,
                   fontWeight: 700,
-                  cursor: createObservation.isPending ? "not-allowed" : "pointer",
+                  cursor: submitting ? "not-allowed" : "pointer",
                   transition: "background 0.15s",
                   display: "flex",
                   alignItems: "center",
@@ -814,7 +849,7 @@ export default function ObservationNew() {
                   gap: 8,
                 }}
               >
-                {createObservation.isPending ? (
+                {submitting ? (
                   <>
                     <div style={{ display: "flex", gap: 4 }}>
                       {[0,1,2].map(i => (
@@ -827,7 +862,7 @@ export default function ObservationNew() {
               </button>
               <button
                 onClick={() => handleSubmit('draft')}
-                disabled={createObservation.isPending}
+                disabled={submitting}
                 onMouseEnter={() => setDraftBtnHover(true)}
                 onMouseLeave={() => setDraftBtnHover(false)}
                 style={{
@@ -840,7 +875,7 @@ export default function ObservationNew() {
                   ...HEAD,
                   fontSize: 14,
                   fontWeight: 600,
-                  cursor: createObservation.isPending ? "not-allowed" : "pointer",
+                  cursor: submitting ? "not-allowed" : "pointer",
                   transition: "all 0.15s",
                   display: "flex",
                   alignItems: "center",

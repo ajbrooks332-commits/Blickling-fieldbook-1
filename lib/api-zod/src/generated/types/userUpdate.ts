@@ -12,5 +12,9 @@ export interface UserUpdate {
   email?: string;
   role?: UserUpdateRole;
   active?: boolean;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
   password?: string;
 }

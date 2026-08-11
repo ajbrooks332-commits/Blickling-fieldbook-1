@@ -1,6 +1,7 @@
 import React, { useState } from "react"
-import { useGetReportSummary } from "@workspace/api-client-react"
+import { getGetReportSummaryQueryKey, useGetReportSummary } from "@workspace/api-client-react"
 import { FileText, TrendingUp, AlertTriangle, CheckCircle2, Printer, Download } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const C = {
   bg: "#0d1117",
@@ -28,10 +29,27 @@ export default function Reports() {
     return d.toISOString().split('T')[0]
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
-  const { data: summary, isLoading } = useGetReportSummary({ dateFrom, dateTo })
+  const reportParams = { dateFrom, dateTo }
+  const { data: summary, isLoading, error: loadError } = useGetReportSummary(reportParams, {
+    query: { enabled: dateFrom <= dateTo, queryKey: getGetReportSummaryQueryKey(reportParams) },
+  })
 
   const handlePrint = () => window.print()
+  const handleExport = async () => {
+    setExporting(true); setExportError(null)
+    try {
+      const query = new URLSearchParams({ dateFrom, dateTo })
+      const response = await apiFetch(`/api/reports/export.csv?${query}`)
+      if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "CSV export failed.")
+      const url = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `blickling-fieldbook-${dateFrom}-to-${dateTo}.csv`; anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error) { setExportError(error instanceof Error ? error.message : "CSV export failed.") }
+    finally { setExporting(false) }
+  }
 
   if (isLoading) {
     return (
@@ -49,7 +67,8 @@ export default function Reports() {
     )
   }
 
-  if (!summary) {
+  if (dateFrom > dateTo) return <div role="alert" className="rounded-md border border-destructive/30 p-4">The start date must be on or before the end date.</div>
+  if (loadError || !summary) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3">
         <div className="w-14 h-14 rounded-full flex items-center justify-center" style={{ background: "#21262d" }}>
@@ -83,15 +102,18 @@ export default function Reports() {
             <Printer className="w-4 h-4" /> Print
           </button>
           <button
+            onClick={handleExport}
+            disabled={exporting}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
             style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD }}
             onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
             onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
           >
-            <Download className="w-4 h-4" /> Export CSV
+            <Download className="w-4 h-4" /> {exporting ? "Exporting…" : "Export CSV"}
           </button>
         </div>
       </div>
+      {exportError && <p role="alert" className="text-sm text-red-400">{exportError}</p>}
 
       {/* Date range picker */}
       <div

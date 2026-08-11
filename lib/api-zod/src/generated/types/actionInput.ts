@@ -12,12 +12,14 @@ export interface ActionInput {
   title: string;
   description?: string;
   observationId?: number;
-  assignedToUserId?: number;
+  assignedToUserId: number;
   priority: ActionInputPriority;
   status: ActionInputStatus;
-  dueDate?: string;
+  dueDate?: Date;
   estimatedMinutes?: number;
   equipmentRequired?: boolean;
   contractorRequired?: boolean;
   notes?: string;
+  createdOffline?: boolean;
+  offlineId?: string;
 }

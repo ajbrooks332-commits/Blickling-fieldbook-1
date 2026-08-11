@@ -6,21 +6,26 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ObservationUpdatePriority } from './observationUpdatePriority';
-import type { ObservationUpdateStatus } from './observationUpdateStatus';
 
 export interface ObservationUpdate {
-  /** @maxLength 100 */
+  /** @maxLength 200 */
   title?: string;
-  description?: string;
+  /** @nullable */
+  description?: string | null;
   categoryId?: number;
   priority?: ObservationUpdatePriority;
-  status?: ObservationUpdateStatus;
   observedAt?: string;
-  latitude?: number;
-  longitude?: number;
-  namedLocationId?: number;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  gpsAccuracyMetres?: number | null;
+  /** @nullable */
+  namedLocationId?: number | null;
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
 }

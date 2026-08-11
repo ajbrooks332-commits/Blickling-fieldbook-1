@@ -1,7 +1,8 @@
 import React, { useState } from "react"
-import { useCreateAction, useGetObservation } from "@workspace/api-client-react"
+import { useCreateAction, useGetMe, useGetObservation, useListAssignees } from "@workspace/api-client-react"
 import { useLocation, useSearch } from "wouter"
 import { Save, Clock, Users, ArrowLeft, Check } from "lucide-react"
+import { queueAction } from "@/lib/offline"
 
 const C = {
   bg: "#0d1117",
@@ -77,18 +78,20 @@ const labelStyle: React.CSSProperties = {
 }
 
 export default function ActionNew() {
-  const [location, setLocation] = useLocation()
+  const [, setLocation] = useLocation()
   const search = useSearch()
 
   const searchParams = new URLSearchParams(search)
   const obsIdParam = searchParams.get('observationId')
   const observationId = obsIdParam ? Number(obsIdParam) : undefined
 
-  const { data: obs, isLoading: obsLoading } = useGetObservation(observationId || 0, {
+  const { data: obs } = useGetObservation(observationId || 0, {
     query: { enabled: !!observationId, queryKey: ['observation', observationId] }
   })
 
   const createAction = useCreateAction()
+  const { data: me } = useGetMe()
+  const { data: assignees = [] } = useListAssignees()
 
   const [formData, setFormData] = useState({
     title: "",
@@ -99,38 +102,48 @@ export default function ActionNew() {
     estimatedMinutes: "",
     equipmentRequired: false,
     contractorRequired: false,
-    notes: ""
+    assignedToUserId: ""
   })
+  const [error, setError] = useState<string | null>(null)
+  const [queueing, setQueueing] = useState(false)
 
   const [submitHover, setSubmitHover] = useState(false)
   const [cancelHover, setCancelHover] = useState(false)
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    createAction.mutate(
-      {
-        data: {
-          title: formData.title,
-          description: formData.description,
-          priority: formData.priority,
-          status: formData.status,
-          dueDate: formData.dueDate ? new Date(formData.dueDate).toISOString() : undefined,
-          estimatedMinutes: formData.estimatedMinutes ? Number(formData.estimatedMinutes) : undefined,
-          equipmentRequired: formData.equipmentRequired,
-          contractorRequired: formData.contractorRequired,
-          notes: formData.notes,
-          observationId: observationId
-        }
-      },
-      {
-        onSuccess: (data) => {
-          setLocation(`/actions/${data.id}`)
-        }
-      }
-    )
+    setError(null)
+    if (!me) return setError("Your session could not be verified. Reload the app and try again.")
+    const offlineId = crypto.randomUUID()
+    const data = {
+      title: formData.title.trim(), description: formData.description.trim() || undefined,
+      priority: formData.priority, status: formData.status,
+      assignedToUserId: Number(formData.assignedToUserId), dueDate: formData.dueDate || undefined,
+      estimatedMinutes: formData.estimatedMinutes ? Number(formData.estimatedMinutes) : undefined,
+      equipmentRequired: formData.equipmentRequired, contractorRequired: formData.contractorRequired,
+      observationId, offlineId,
+    }
+    if (!navigator.onLine) {
+      setQueueing(true)
+      try { await queueAction({ ...data, createdOffline: true }, me.id); setLocation("/actions?queued=1") }
+      catch { setError("The action could not be saved on this device.") }
+      finally { setQueueing(false) }
+      return
+    }
+    try {
+      const created = await createAction.mutateAsync({ data })
+      setLocation(`/actions/${created.id}`)
+    } catch (err) {
+      if (err instanceof TypeError) {
+        setQueueing(true)
+        try { await queueAction({ ...data, createdOffline: true }, me.id); setLocation("/actions?queued=1") }
+        catch { setError("The connection failed and the action could not be queued.") }
+        finally { setQueueing(false) }
+      } else setError(err instanceof Error ? err.message : "Action could not be created.")
+    }
   }
 
-  const canSubmit = formData.title.trim().length > 0 && !createAction.isPending
+  const canSubmit = formData.title.trim().length > 0 && Boolean(formData.assignedToUserId) && !createAction.isPending && !queueing
 
   return (
     <div style={{ maxWidth: 640, margin: "0 auto", padding: "0 0 40px" }}>
@@ -257,7 +270,7 @@ export default function ActionNew() {
             <div>
               <label style={labelStyle}>Status</label>
               <div style={{ display: "flex", flexWrap: "wrap" as const, gap: 8 }}>
-                {(['not_started', 'planned', 'in_progress'] as const).map(s => {
+                {(['not_started', 'planned'] as const).map(s => {
                   const selected = formData.status === s
                   const col = statusColor(s)
                   return (
@@ -287,6 +300,15 @@ export default function ActionNew() {
                   )
                 })}
               </div>
+            </div>
+
+            <div>
+              <label htmlFor="action-assignee" style={labelStyle}>Assigned to <span style={{ color: C.urgent }}>*</span></label>
+              <select id="action-assignee" required style={inputStyle} value={formData.assignedToUserId}
+                onChange={e => setFormData(d => ({ ...d, assignedToUserId: e.target.value }))}>
+                <option value="">Select a member of staff</option>
+                {assignees.map(person => <option key={person.id} value={person.id}>{person.name} — {person.role.replace('_', ' ')}</option>)}
+              </select>
             </div>
 
             {/* Divider */}
@@ -397,6 +419,7 @@ export default function ActionNew() {
           </div>
 
           {/* Footer */}
+          {error && <div role="alert" style={{ margin: "16px 24px 0", color: C.urgent, fontSize: 13 }}>{error}</div>}
           <div style={{
             borderTop: `1px solid ${C.borderMid}`,
             padding: "16px 24px",
@@ -448,14 +471,14 @@ export default function ActionNew() {
                 gap: 7,
               }}
             >
-              {createAction.isPending ? (
+              {createAction.isPending || queueing ? (
                 <>
                   <div style={{ display: "flex", gap: 3 }}>
                     {[0,1,2].map(i => (
                       <div key={i} style={{ width: 5, height: 5, borderRadius: "50%", background: "#fff", animation: `bounce 1s ${i * 0.15}s infinite` }} />
                     ))}
                   </div>
-                  Saving...
+                  {queueing ? "Saving offline…" : "Saving…"}
                 </>
               ) : (
                 <><Save size={15} /> Create Action</>

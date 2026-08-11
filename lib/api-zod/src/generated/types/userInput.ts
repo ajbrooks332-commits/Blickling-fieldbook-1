@@ -11,6 +11,9 @@ export interface UserInput {
   name: string;
   email: string;
   role: UserInputRole;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
   password: string;
-  propertyId?: number;
 }

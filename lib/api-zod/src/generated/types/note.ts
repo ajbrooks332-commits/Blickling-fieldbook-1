@@ -13,6 +13,8 @@ export interface Note {
   observationId?: number | null;
   /** @nullable */
   actionId?: number | null;
+  /** @nullable */
+  offlineId?: string | null;
   createdByUserId: number;
   /** @nullable */
   createdByName?: string | null;

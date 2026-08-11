@@ -1,6 +1,6 @@
-import React, { useState } from "react"
+import React, { useDeferredValue, useState } from "react"
 import { useListObservations } from "@workspace/api-client-react"
-import { Search, Filter, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, ShieldAlert, X } from "lucide-react"
+import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, ShieldAlert, X } from "lucide-react"
 import { Link, useSearch } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 
@@ -79,11 +79,15 @@ export default function ObservationList() {
   const [search, setSearch] = useState("")
   const [searchFocused, setSearchFocused] = useState(false)
   const [priorityFilter, setPriorityFilter] = useState(initialPriority)
+  const [statusFilter, setStatusFilter] = useState("")
+  const [page, setPage] = useState(1)
+  const deferredSearch = useDeferredValue(search)
 
-  const { data: listData, isLoading } = useListObservations({
-    status: '',
-    search,
+  const { data: listData, isLoading, error: loadError } = useListObservations({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    search: deferredSearch,
     ...(priorityFilter ? { priority: priorityFilter } : {}),
+    page, limit: 20,
   })
 
   return (
@@ -99,7 +103,7 @@ export default function ObservationList() {
         <div className="flex items-center gap-2">
           <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Filtered by:</span>
           <button
-            onClick={() => setPriorityFilter("")}
+            onClick={() => { setPriorityFilter(""); setPage(1) }}
             className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
             style={{
               background: priorityConfig(priorityFilter).bg,
@@ -124,7 +128,7 @@ export default function ObservationList() {
           <input
             placeholder="Search reference, title, location..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             onFocus={() => setSearchFocused(true)}
             onBlur={() => setSearchFocused(false)}
             style={{
@@ -141,36 +145,14 @@ export default function ObservationList() {
             }}
           />
         </div>
-        <button
-          style={{
-            background: "transparent",
-            border: `1px solid ${C.border}`,
-            borderRadius: "0.625rem",
-            color: C.muted,
-            fontSize: 13,
-            fontWeight: 500,
-            padding: "8px 14px",
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            cursor: "pointer",
-            ...HEAD,
-          }}
-          onMouseEnter={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = C.borderMid
-            ;(e.currentTarget as HTMLButtonElement).style.color = C.text
-          }}
-          onMouseLeave={e => {
-            (e.currentTarget as HTMLButtonElement).style.background = "transparent"
-            ;(e.currentTarget as HTMLButtonElement).style.color = C.muted
-          }}
-        >
-          <Filter className="h-4 w-4" /> Filters
-        </button>
+        <label className="sr-only" htmlFor="observation-status">Status</label><select id="observation-status" value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1) }} className="rounded-md border bg-background px-3 py-2 text-sm">
+          <option value="">All statuses</option>{["draft", "submitted", "under_review", "action_required", "monitoring", "resolved", "closed", "cancelled"].map((status) => <option key={status} value={status}>{statusLabel(status)}</option>)}
+        </select>
       </div>
 
       {/* Loading */}
-      {isLoading ? (
+      {loadError ? <div role="alert" className="rounded-md border border-destructive/30 p-4">Observations could not be loaded.</div> : isLoading ? (
         <div className="flex justify-center items-center p-12 gap-2">
           <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
           <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "150ms" }} />
@@ -335,6 +317,11 @@ export default function ObservationList() {
           })}
         </div>
       )}
+      {listData && listData.total > listData.limit && <nav aria-label="Observation pages" className="flex items-center justify-between border-t pt-4">
+        <button type="button" disabled={page === 1 || isLoading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-md border px-3 py-2 disabled:opacity-50">Previous</button>
+        <span className="text-sm text-muted-foreground">Page {page} of {Math.ceil(listData.total / listData.limit)} · {listData.total} records</span>
+        <button type="button" disabled={page >= Math.ceil(listData.total / listData.limit) || isLoading} onClick={() => setPage((value) => value + 1)} className="rounded-md border px-3 py-2 disabled:opacity-50">Next</button>
+      </nav>}
     </div>
   )
 }

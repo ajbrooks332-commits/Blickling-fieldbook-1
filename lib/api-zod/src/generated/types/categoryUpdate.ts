@@ -8,9 +8,12 @@
 
 export interface CategoryUpdate {
   name?: string;
-  description?: string;
-  icon?: string;
-  displayColour?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  icon?: string | null;
+  /** @nullable */
+  displayColour?: string | null;
   sortOrder?: number;
   active?: boolean;
 }

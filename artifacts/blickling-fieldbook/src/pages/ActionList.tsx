@@ -86,16 +86,19 @@ export default function ActionList() {
   const [statusFilter, setStatusFilter] = React.useState("")
   const [overdueOnly, setOverdueOnly] = React.useState(initialOverdue)
   const [priorityFilter, setPriorityFilter] = React.useState(initialPriority)
+  const [page, setPage] = React.useState(1)
+  const deferredSearch = React.useDeferredValue(search)
 
-  const { data: listData, isLoading } = useListActions({
-    status: statusFilter,
-    search,
+  const { data: listData, isLoading, error: loadError } = useListActions({
+    ...(statusFilter ? { status: statusFilter } : {}),
+    search: deferredSearch,
     ...(overdueOnly ? { overdue: true } : {}),
     ...(priorityFilter ? { priority: priorityFilter } : {}),
+    page, limit: 20,
   })
 
-  const isOverdue = (dueDate: string | null | undefined) => {
-    if (!dueDate) return false
+  const isOverdue = (dueDate: string | null | undefined, status: string) => {
+    if (!dueDate || status === "completed" || status === "cancelled") return false
     return new Date(dueDate) < new Date()
   }
 
@@ -113,7 +116,7 @@ export default function ActionList() {
           <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Filtered by:</span>
           {overdueOnly && (
             <button
-              onClick={() => setOverdueOnly(false)}
+              onClick={() => { setOverdueOnly(false); setPage(1) }}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
               style={{ background: C.urgentTint, color: C.urgent, border: `1px solid ${C.urgent}40`, ...BODY }}
             >
@@ -122,7 +125,7 @@ export default function ActionList() {
           )}
           {priorityFilter && (
             <button
-              onClick={() => setPriorityFilter("")}
+              onClick={() => { setPriorityFilter(""); setPage(1) }}
               className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
               style={{ background: priorityConfig(priorityFilter).bg, color: priorityConfig(priorityFilter).color, border: `1px solid ${priorityConfig(priorityFilter).color}40`, ...BODY }}
             >
@@ -139,7 +142,7 @@ export default function ActionList() {
           <input
             placeholder="Search action ref, title, assignee..."
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
             style={{
               ...BODY,
               width: "100%",
@@ -157,7 +160,7 @@ export default function ActionList() {
         </div>
         <select
           value={statusFilter}
-          onChange={e => setStatusFilter(e.target.value)}
+          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
           style={{
             ...BODY,
             background: C.bg,
@@ -183,7 +186,7 @@ export default function ActionList() {
       </div>
 
       {/* Loading */}
-      {isLoading ? (
+      {loadError ? <div role="alert" className="rounded-md border border-destructive/30 p-4">Actions could not be loaded.</div> : isLoading ? (
         <div className="flex justify-center items-center gap-1 p-12">
           {[0, 150, 300].map(delay => (
             <div
@@ -207,7 +210,7 @@ export default function ActionList() {
         <div className="grid gap-3">
           {listData?.actions.map(act => {
             const pc = priorityConfig(act.priority)
-            const overdue = isOverdue(act.dueDate)
+            const overdue = isOverdue(act.dueDate, act.status)
             return (
               <Link key={act.id} href={`/actions/${act.id}`}>
                 <div
@@ -313,6 +316,11 @@ export default function ActionList() {
           })}
         </div>
       )}
+      {listData && listData.total > listData.limit && <nav aria-label="Action pages" className="flex items-center justify-between border-t pt-4">
+        <button type="button" disabled={page === 1 || isLoading} onClick={() => setPage((value) => Math.max(1, value - 1))} className="rounded-md border px-3 py-2 disabled:opacity-50">Previous</button>
+        <span className="text-sm text-muted-foreground">Page {page} of {Math.ceil(listData.total / listData.limit)} · {listData.total} records</span>
+        <button type="button" disabled={page >= Math.ceil(listData.total / listData.limit) || isLoading} onClick={() => setPage((value) => value + 1)} className="rounded-md border px-3 py-2 disabled:opacity-50">Next</button>
+      </nav>}
     </div>
   )
 }

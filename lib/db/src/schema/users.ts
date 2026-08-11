@@ -13,6 +13,8 @@ export const usersTable = pgTable("users", {
   role: userRoleEnum("role").notNull().default("team_member"),
   active: boolean("active").notNull().default(true),
   propertyId: integer("property_id").references(() => propertiesTable.id),
+  sessionVersion: integer("session_version").notNull().default(1),
+  mustChangePassword: boolean("must_change_password").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastLoginAt: timestamp("last_login_at"),

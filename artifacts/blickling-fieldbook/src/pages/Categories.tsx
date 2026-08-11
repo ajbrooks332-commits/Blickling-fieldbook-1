@@ -47,7 +47,7 @@ interface EditRowState {
 }
 
 export default function Categories() {
-  const { data: categories, isLoading } = useListCategories()
+  const { data: categories, isLoading, error: loadError } = useListCategories()
   const createCategory = useCreateCategory()
   const updateCategory = useUpdateCategory()
   const queryClient = useQueryClient()
@@ -56,8 +56,9 @@ export default function Categories() {
   const [newForm, setNewForm] = useState<EditRowState>({ name: "", description: "", displayColour: "#10b981" })
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<EditRowState>({ name: "", description: "", displayColour: "#10b981" })
+  const [requestError, setRequestError] = useState<string | null>(null)
 
-  if (isLoading || !categories) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center" style={{ minHeight: 200 }}>
         <div className="flex gap-1.5">
@@ -72,9 +73,11 @@ export default function Categories() {
       </div>
     )
   }
+  if (loadError || !categories) return <div role="alert" className="rounded-md border border-destructive/30 p-4">Categories could not be loaded.</div>
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
+    setRequestError(null)
     if (!newForm.name.trim()) return
     createCategory.mutate(
       { data: { name: newForm.name, description: newForm.description || undefined, displayColour: newForm.displayColour } },
@@ -83,7 +86,7 @@ export default function Categories() {
           queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() })
           setCreateOpen(false)
           setNewForm({ name: "", description: "", displayColour: "#10b981" })
-        },
+        }, onError: (error) => setRequestError(error instanceof Error ? error.message : "Category could not be created."),
       }
     )
   }
@@ -98,21 +101,24 @@ export default function Categories() {
   }
 
   const handleUpdate = (id: number) => {
+    setRequestError(null)
     updateCategory.mutate(
-      { id, data: { name: editForm.name, description: editForm.description || undefined, displayColour: editForm.displayColour } },
+      { id, data: { name: editForm.name, description: editForm.description || null, displayColour: editForm.displayColour } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() })
           setEditingId(null)
-        },
+        }, onError: (error) => setRequestError(error instanceof Error ? error.message : "Category could not be updated."),
       }
     )
   }
 
   const handleToggleActive = (id: number, active: boolean) => {
+    setRequestError(null)
     updateCategory.mutate(
       { id, data: { active: !active } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() }) }
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() }),
+        onError: (error) => setRequestError(error instanceof Error ? error.message : "Category status could not be changed.") }
     )
   }
 
@@ -134,6 +140,7 @@ export default function Categories() {
           <Plus className="w-4 h-4" /> Add Category
         </button>
       </div>
+      {requestError && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{requestError}</p>}
 
       {/* Create form */}
       {createOpen && (
@@ -145,8 +152,9 @@ export default function Categories() {
           <h2 style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: C.text }}>New Category</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Name *</label>
+              <label htmlFor="new-category-name" style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Name *</label>
               <input
+                id="new-category-name" maxLength={120}
                 value={newForm.name}
                 onChange={e => setNewForm(f => ({ ...f, name: e.target.value }))}
                 required
@@ -157,8 +165,9 @@ export default function Categories() {
               />
             </div>
             <div className="space-y-1.5">
-              <label style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</label>
+              <label htmlFor="new-category-description" style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Description</label>
               <input
+                id="new-category-description" maxLength={1000}
                 value={newForm.description}
                 onChange={e => setNewForm(f => ({ ...f, description: e.target.value }))}
                 placeholder="Optional description"
@@ -169,7 +178,7 @@ export default function Categories() {
             </div>
           </div>
           <div className="space-y-1.5">
-            <label style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Colour</label>
+            <label htmlFor="new-category-colour" style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>Colour</label>
             <div className="flex flex-wrap gap-2 items-center">
               {PRESET_COLOURS.map(col => (
                 <button
@@ -186,6 +195,7 @@ export default function Categories() {
                 />
               ))}
               <input
+                id="new-category-colour" aria-label="Custom category colour"
                 type="color"
                 value={newForm.displayColour}
                 onChange={e => setNewForm(f => ({ ...f, displayColour: e.target.value }))}

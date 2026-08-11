@@ -5,5 +5,6 @@ declare module "express-session" {
     userId: number;
     userRole: "administrator" | "manager" | "team_member";
     propertyId: number | null;
+    sessionVersion: number;
   }
 }

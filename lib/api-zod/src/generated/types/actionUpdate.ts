@@ -6,19 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActionUpdatePriority } from './actionUpdatePriority';
-import type { ActionUpdateStatus } from './actionUpdateStatus';
 
 export interface ActionUpdate {
   title?: string;
-  description?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  observationId?: number | null;
   assignedToUserId?: number;
   priority?: ActionUpdatePriority;
-  status?: ActionUpdateStatus;
-  dueDate?: string;
-  estimatedMinutes?: number;
+  /** @nullable */
+  dueDate?: Date | null;
+  /** @nullable */
+  estimatedMinutes?: number | null;
   equipmentRequired?: boolean;
   contractorRequired?: boolean;
-  completionNote?: string;
-  waitingReason?: string;
-  cancellationReason?: string;
 }

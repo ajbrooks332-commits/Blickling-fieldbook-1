@@ -1,14 +1,7 @@
 import { randomUUID } from 'crypto';
 import { Readable } from 'stream';
 import { File, Storage } from '@google-cloud/storage';
-
-import {
-  canAccessObject,
-  getObjectAclPolicy,
-  ObjectAclPolicy,
-  ObjectPermission,
-  setObjectAclPolicy,
-} from './objectAcl';
+import sharp from 'sharp';
 
 const REPLIT_SIDECAR_ENDPOINT = 'http://127.0.0.1:1106';
 
@@ -41,25 +34,6 @@ export class ObjectNotFoundError extends Error {
 export class ObjectStorageService {
   constructor() {}
 
-  getPublicObjectSearchPaths(): Array<string> {
-    const pathsStr = process.env.PUBLIC_OBJECT_SEARCH_PATHS || '';
-    const paths = Array.from(
-      new Set(
-        pathsStr
-          .split(',')
-          .map((path) => path.trim())
-          .filter((path) => path.length > 0),
-      ),
-    );
-    if (paths.length === 0) {
-      throw new Error(
-        "PUBLIC_OBJECT_SEARCH_PATHS not set. Create a bucket in 'Object Storage' " +
-          'tool and set PUBLIC_OBJECT_SEARCH_PATHS env var (comma-separated paths).',
-      );
-    }
-    return paths;
-  }
-
   getPrivateObjectDir(): string {
     const dir = process.env.PRIVATE_OBJECT_DIR || '';
     if (!dir) {
@@ -71,38 +45,18 @@ export class ObjectStorageService {
     return dir;
   }
 
-  async searchPublicObject(filePath: string): Promise<File | null> {
-    for (const searchPath of this.getPublicObjectSearchPaths()) {
-      const fullPath = `${searchPath}/${filePath}`;
-
-      const { bucketName, objectName } = parseObjectPath(fullPath);
-      const bucket = objectStorageClient.bucket(bucketName);
-      const file = bucket.file(objectName);
-
-      const [exists] = await file.exists();
-      if (exists) {
-        return file;
-      }
-    }
-
-    return null;
-  }
-
   async downloadObject(
     file: File,
     cacheTtlSec: number = 3600,
   ): Promise<Response> {
     const [metadata] = await file.getMetadata();
-    const aclPolicy = await getObjectAclPolicy(file);
-    const isPublic = aclPolicy?.visibility === 'public';
-
     const nodeStream = file.createReadStream();
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
 
     const headers: Record<string, string> = {
       'Content-Type':
         (metadata.contentType as string) || 'application/octet-stream',
-      'Cache-Control': `${isPublic ? 'public' : 'private'}, max-age=${cacheTtlSec}`,
+      'Cache-Control': `private, max-age=${cacheTtlSec}`,
     };
     if (metadata.size) {
       headers['Content-Length'] = String(metadata.size);
@@ -159,6 +113,42 @@ export class ObjectStorageService {
     return objectFile;
   }
 
+  async validateAndNormaliseImage(objectPath: string): Promise<{ mimeType: "image/webp"; fileSize: number; originalFileSize: number; originalMimeType: string }> {
+    const file = await this.getObjectEntityFile(objectPath);
+    const [metadata] = await file.getMetadata();
+    const rawSize = Number(metadata.size ?? 0);
+    if (!Number.isFinite(rawSize) || rawSize < 1 || rawSize > 10 * 1024 * 1024) {
+      throw new Error('Image must be between 1 byte and 10 MB');
+    }
+
+    const [raw] = await file.download();
+    const image = sharp(raw, { failOn: 'warning', limitInputPixels: 40_000_000 });
+    const details = await image.metadata();
+    if (!details.format || !['jpeg', 'png', 'webp'].includes(details.format)) {
+      throw new Error('Only JPEG, PNG and WebP images are accepted');
+    }
+    const originalMimeType = details.format === 'jpeg' ? 'image/jpeg' : `image/${details.format}`;
+
+    const normalised = await image.rotate().resize({
+      width: 2560,
+      height: 2560,
+      fit: 'inside',
+      withoutEnlargement: true,
+    }).webp({ quality: 85 }).toBuffer();
+
+    await file.save(normalised, {
+      resumable: false,
+      validation: 'crc32c',
+      metadata: { contentType: 'image/webp', cacheControl: 'private, no-store' },
+    });
+    return { mimeType: 'image/webp', fileSize: normalised.length, originalFileSize: rawSize, originalMimeType };
+  }
+
+  async deleteObjectEntity(objectPath: string): Promise<void> {
+    const file = await this.getObjectEntityFile(objectPath);
+    await file.delete({ ignoreNotFound: true });
+  }
+
   normalizeObjectEntityPath(rawPath: string): string {
     if (!rawPath.startsWith('https://storage.googleapis.com/')) {
       return rawPath;
@@ -180,35 +170,6 @@ export class ObjectStorageService {
     return `/objects/${entityId}`;
   }
 
-  async trySetObjectEntityAclPolicy(
-    rawPath: string,
-    aclPolicy: ObjectAclPolicy,
-  ): Promise<string> {
-    const normalizedPath = this.normalizeObjectEntityPath(rawPath);
-    if (!normalizedPath.startsWith('/')) {
-      return normalizedPath;
-    }
-
-    const objectFile = await this.getObjectEntityFile(normalizedPath);
-    await setObjectAclPolicy(objectFile, aclPolicy);
-    return normalizedPath;
-  }
-
-  async canAccessObjectEntity({
-    userId,
-    objectFile,
-    requestedPermission,
-  }: {
-    userId?: string;
-    objectFile: File;
-    requestedPermission?: ObjectPermission;
-  }): Promise<boolean> {
-    return canAccessObject({
-      userId,
-      objectFile,
-      requestedPermission: requestedPermission ?? ObjectPermission.READ,
-    });
-  }
 }
 
 function parseObjectPath(path: string): {
@@ -267,6 +228,8 @@ async function signObjectURL({
     );
   }
 
-  const { signed_url: signedURL } = await response.json();
+  const payload = await response.json() as { signed_url?: string };
+  const signedURL = payload.signed_url;
+  if (!signedURL) throw new Error('Object storage did not return a signed URL');
   return signedURL;
 }

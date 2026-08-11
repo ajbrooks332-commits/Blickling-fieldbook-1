@@ -27,12 +27,15 @@ import type {
   ActionList,
   ActionStatusUpdate,
   ActionUpdate,
+  Assignee,
   AuthUser,
   Category,
   CategoryInput,
   CategoryUpdate,
+  ChangePasswordInput,
   DashboardCharts,
   DashboardSummary,
+  ExportReportCsvParams,
   GetObservationMapDataParams,
   GetReportSummaryParams,
   HealthStatus,
@@ -54,6 +57,8 @@ import type {
   ObservationMarker,
   ObservationUpdate,
   ReportSummary,
+  SetupInput,
+  SetupStatus,
   StatusUpdate,
   UploadUrlRequest,
   UploadUrlResponse,
@@ -165,6 +170,154 @@ export function useHealthCheck<TData = Awaited<ReturnType<typeof healthCheck>>, 
 
 
 
+
+export const getGetSetupStatusUrl = () => {
+
+
+
+
+  return `/api/auth/setup-status`
+}
+
+/**
+ * @summary Check whether initial administrator setup is required
+ */
+export const getSetupStatus = async ( options?: RequestInit): Promise<SetupStatus> => {
+
+  return customFetch<SetupStatus>(getGetSetupStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSetupStatusQueryKey = () => {
+    return [
+    `/api/auth/setup-status`
+    ] as const;
+    }
+
+
+export const getGetSetupStatusQueryOptions = <TData = Awaited<ReturnType<typeof getSetupStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSetupStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSetupStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSetupStatus>>> = ({ signal }) => getSetupStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSetupStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSetupStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getSetupStatus>>>
+export type GetSetupStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Check whether initial administrator setup is required
+ */
+
+export function useGetSetupStatus<TData = Awaited<ReturnType<typeof getSetupStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSetupStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSetupStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getCompleteSetupUrl = () => {
+
+
+
+
+  return `/api/auth/setup`
+}
+
+/**
+ * @summary Complete the one-time secret-protected administrator setup
+ */
+export const completeSetup = async (setupInput: SetupInput, options?: RequestInit): Promise<AuthUser> => {
+
+  return customFetch<AuthUser>(getCompleteSetupUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(setupInput)
+  }
+);}
+
+
+
+
+
+export const getCompleteSetupMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeSetup>>, TError,{data: BodyType<SetupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof completeSetup>>, TError,{data: BodyType<SetupInput>}, TContext> => {
+
+const mutationKey = ['completeSetup'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof completeSetup>>, {data: BodyType<SetupInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  completeSetup(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CompleteSetupMutationResult = NonNullable<Awaited<ReturnType<typeof completeSetup>>>
+    export type CompleteSetupMutationBody = BodyType<SetupInput>
+    export type CompleteSetupMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Complete the one-time secret-protected administrator setup
+ */
+export const useCompleteSetup = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof completeSetup>>, TError,{data: BodyType<SetupInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof completeSetup>>,
+        TError,
+        {data: BodyType<SetupInput>},
+        TContext
+      > => {
+      return useMutation(getCompleteSetupMutationOptions(options));
+    }
 
 export const getLoginUrl = () => {
 
@@ -385,6 +538,154 @@ export function useGetMe<TData = Awaited<ReturnType<typeof getMe>>, TError = Err
 
 
 
+export const getChangePasswordUrl = () => {
+
+
+
+
+  return `/api/auth/change-password`
+}
+
+/**
+ * @summary Change the current user's password
+ */
+export const changePassword = async (changePasswordInput: ChangePasswordInput, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getChangePasswordUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(changePasswordInput)
+  }
+);}
+
+
+
+
+
+export const getChangePasswordMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext> => {
+
+const mutationKey = ['changePassword'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changePassword>>, {data: BodyType<ChangePasswordInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  changePassword(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangePasswordMutationResult = NonNullable<Awaited<ReturnType<typeof changePassword>>>
+    export type ChangePasswordMutationBody = BodyType<ChangePasswordInput>
+    export type ChangePasswordMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Change the current user's password
+ */
+export const useChangePassword = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changePassword>>, TError,{data: BodyType<ChangePasswordInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changePassword>>,
+        TError,
+        {data: BodyType<ChangePasswordInput>},
+        TContext
+      > => {
+      return useMutation(getChangePasswordMutationOptions(options));
+    }
+
+export const getListAssigneesUrl = () => {
+
+
+
+
+  return `/api/users/assignees`
+}
+
+/**
+ * @summary List active users available for action assignment
+ */
+export const listAssignees = async ( options?: RequestInit): Promise<Assignee[]> => {
+
+  return customFetch<Assignee[]>(getListAssigneesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListAssigneesQueryKey = () => {
+    return [
+    `/api/users/assignees`
+    ] as const;
+    }
+
+
+export const getListAssigneesQueryOptions = <TData = Awaited<ReturnType<typeof listAssignees>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAssignees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListAssigneesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAssignees>>> = ({ signal }) => listAssignees({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAssignees>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListAssigneesQueryResult = NonNullable<Awaited<ReturnType<typeof listAssignees>>>
+export type ListAssigneesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List active users available for action assignment
+ */
+
+export function useListAssignees<TData = Awaited<ReturnType<typeof listAssignees>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAssignees>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListAssigneesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
 export const getListUsersUrl = () => {
 
 
@@ -394,7 +695,7 @@ export const getListUsersUrl = () => {
 }
 
 /**
- * @summary List all users (admin/manager)
+ * @summary List all users (administrator only)
  */
 export const listUsers = async ( options?: RequestInit): Promise<User[]> => {
 
@@ -441,7 +742,7 @@ export type ListUsersQueryError = ErrorType<unknown>
 
 
 /**
- * @summary List all users (admin/manager)
+ * @summary List all users (administrator only)
  */
 
 export function useListUsers<TData = Awaited<ReturnType<typeof listUsers>>, TError = ErrorType<unknown>>(
@@ -768,7 +1069,7 @@ export const getCreateCategoryUrl = () => {
 }
 
 /**
- * @summary Create a category (admin)
+ * @summary Create a category (administrator/manager)
  */
 export const createCategory = async (categoryInput: CategoryInput, options?: RequestInit): Promise<Category> => {
 
@@ -817,7 +1118,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateCategoryMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a category (admin)
+ * @summary Create a category (administrator/manager)
  */
 export const useCreateCategory = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createCategory>>, TError,{data: BodyType<CategoryInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -839,7 +1140,7 @@ export const getUpdateCategoryUrl = (id: number,) => {
 }
 
 /**
- * @summary Update a category (admin)
+ * @summary Update a category (administrator/manager)
  */
 export const updateCategory = async (id: number,
     categoryUpdate: CategoryUpdate, options?: RequestInit): Promise<Category> => {
@@ -889,7 +1190,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type UpdateCategoryMutationError = ErrorType<unknown>
 
     /**
- * @summary Update a category (admin)
+ * @summary Update a category (administrator/manager)
  */
 export const useUpdateCategory = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCategory>>, TError,{id: number;data: BodyType<CategoryUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -1746,7 +2047,7 @@ export const getCreateActionUrl = () => {
 }
 
 /**
- * @summary Create a new action
+ * @summary Create a new assigned action (administrator/manager)
  */
 export const createAction = async (actionInput: ActionInput, options?: RequestInit): Promise<Action> => {
 
@@ -1795,7 +2096,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateActionMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a new action
+ * @summary Create a new assigned action (administrator/manager)
  */
 export const useCreateAction = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAction>>, TError,{data: BodyType<ActionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2403,6 +2704,90 @@ export function useGetReportSummary<TData = Awaited<ReturnType<typeof getReportS
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetReportSummaryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getExportReportCsvUrl = (params: ExportReportCsvParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports/export.csv?${stringifiedParams}` : `/api/reports/export.csv`
+}
+
+/**
+ * @summary Export observations for a date range as CSV
+ */
+export const exportReportCsv = async (params: ExportReportCsvParams, options?: RequestInit): Promise<string> => {
+
+  return customFetch<string>(getExportReportCsvUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getExportReportCsvQueryKey = (params?: ExportReportCsvParams,) => {
+    return [
+    `/api/reports/export.csv`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getExportReportCsvQueryOptions = <TData = Awaited<ReturnType<typeof exportReportCsv>>, TError = ErrorType<unknown>>(params: ExportReportCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReportCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getExportReportCsvQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof exportReportCsv>>> = ({ signal }) => exportReportCsv(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof exportReportCsv>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ExportReportCsvQueryResult = NonNullable<Awaited<ReturnType<typeof exportReportCsv>>>
+export type ExportReportCsvQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Export observations for a date range as CSV
+ */
+
+export function useExportReportCsv<TData = Awaited<ReturnType<typeof exportReportCsv>>, TError = ErrorType<unknown>>(
+ params: ExportReportCsvParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof exportReportCsv>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getExportReportCsvQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -11,7 +11,37 @@ export interface HealthStatus {
 
 export interface LoginInput {
   email: string;
+  /** @maxLength 128 */
   password: string;
+}
+
+export interface SetupStatus {
+  required: boolean;
+}
+
+export interface SetupInput {
+  /** @minLength 24 */
+  setupSecret: string;
+  /**
+     * @minLength 2
+     * @maxLength 120
+     */
+  name: string;
+  email: string;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
+  password: string;
+}
+
+export interface ChangePasswordInput {
+  currentPassword: string;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
+  newPassword: string;
 }
 
 export type AuthUserRole = typeof AuthUserRole[keyof typeof AuthUserRole];
@@ -29,7 +59,8 @@ export interface AuthUser {
   email: string;
   role: AuthUserRole;
   propertyId: number;
-  active?: boolean;
+  active: boolean;
+  mustChangePassword: boolean;
 }
 
 export type UserRole = typeof UserRole[keyof typeof UserRole];
@@ -66,8 +97,11 @@ export interface UserInput {
   name: string;
   email: string;
   role: UserInputRole;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
   password: string;
-  propertyId?: number;
 }
 
 export type UserUpdateRole = typeof UserUpdateRole[keyof typeof UserUpdateRole];
@@ -84,7 +118,26 @@ export interface UserUpdate {
   email?: string;
   role?: UserUpdateRole;
   active?: boolean;
+  /**
+     * @minLength 14
+     * @maxLength 128
+     */
   password?: string;
+}
+
+export type AssigneeRole = typeof AssigneeRole[keyof typeof AssigneeRole];
+
+
+export const AssigneeRole = {
+  administrator: 'administrator',
+  manager: 'manager',
+  team_member: 'team_member',
+} as const;
+
+export interface Assignee {
+  id: number;
+  name: string;
+  role: AssigneeRole;
 }
 
 export interface Category {
@@ -111,9 +164,12 @@ export interface CategoryInput {
 
 export interface CategoryUpdate {
   name?: string;
-  description?: string;
-  icon?: string;
-  displayColour?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  icon?: string | null;
+  /** @nullable */
+  displayColour?: string | null;
   sortOrder?: number;
   active?: boolean;
 }
@@ -140,9 +196,12 @@ export interface NamedLocationInput {
 
 export interface NamedLocationUpdate {
   name?: string;
-  description?: string;
-  latitude?: number;
-  longitude?: number;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
   active?: boolean;
 }
 
@@ -200,6 +259,7 @@ export interface Observation {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   actionCount?: number;
   propertyId?: number;
@@ -296,6 +356,8 @@ export interface Note {
   observationId?: number | null;
   /** @nullable */
   actionId?: number | null;
+  /** @nullable */
+  offlineId?: string | null;
   createdByUserId: number;
   /** @nullable */
   createdByName?: string | null;
@@ -348,6 +410,7 @@ export interface ObservationDetail {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   propertyId?: number;
   createdAt: string;
@@ -414,6 +477,7 @@ export interface ObservationInput {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   createdOffline?: boolean;
   offlineId?: string;
@@ -429,34 +493,26 @@ export const ObservationUpdatePriority = {
   urgent: 'urgent',
 } as const;
 
-export type ObservationUpdateStatus = typeof ObservationUpdateStatus[keyof typeof ObservationUpdateStatus];
-
-
-export const ObservationUpdateStatus = {
-  draft: 'draft',
-  submitted: 'submitted',
-  under_review: 'under_review',
-  action_required: 'action_required',
-  monitoring: 'monitoring',
-  resolved: 'resolved',
-  closed: 'closed',
-  cancelled: 'cancelled',
-} as const;
-
 export interface ObservationUpdate {
-  /** @maxLength 100 */
+  /** @maxLength 200 */
   title?: string;
-  description?: string;
+  /** @nullable */
+  description?: string | null;
   categoryId?: number;
   priority?: ObservationUpdatePriority;
-  status?: ObservationUpdateStatus;
   observedAt?: string;
-  latitude?: number;
-  longitude?: number;
-  namedLocationId?: number;
+  /** @nullable */
+  latitude?: number | null;
+  /** @nullable */
+  longitude?: number | null;
+  /** @nullable */
+  gpsAccuracyMetres?: number | null;
+  /** @nullable */
+  namedLocationId?: number | null;
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
 }
 
@@ -560,17 +616,13 @@ export type ActionInputStatus = typeof ActionInputStatus[keyof typeof ActionInpu
 export const ActionInputStatus = {
   not_started: 'not_started',
   planned: 'planned',
-  in_progress: 'in_progress',
-  waiting: 'waiting',
-  completed: 'completed',
-  cancelled: 'cancelled',
 } as const;
 
 export interface ActionInput {
   title: string;
   description?: string;
   observationId?: number;
-  assignedToUserId?: number;
+  assignedToUserId: number;
   priority: ActionInputPriority;
   status: ActionInputStatus;
   dueDate?: string;
@@ -578,6 +630,8 @@ export interface ActionInput {
   equipmentRequired?: boolean;
   contractorRequired?: boolean;
   notes?: string;
+  createdOffline?: boolean;
+  offlineId?: string;
 }
 
 export type ActionUpdatePriority = typeof ActionUpdatePriority[keyof typeof ActionUpdatePriority];
@@ -590,31 +644,20 @@ export const ActionUpdatePriority = {
   urgent: 'urgent',
 } as const;
 
-export type ActionUpdateStatus = typeof ActionUpdateStatus[keyof typeof ActionUpdateStatus];
-
-
-export const ActionUpdateStatus = {
-  not_started: 'not_started',
-  planned: 'planned',
-  in_progress: 'in_progress',
-  waiting: 'waiting',
-  completed: 'completed',
-  cancelled: 'cancelled',
-} as const;
-
 export interface ActionUpdate {
   title?: string;
-  description?: string;
+  /** @nullable */
+  description?: string | null;
+  /** @nullable */
+  observationId?: number | null;
   assignedToUserId?: number;
   priority?: ActionUpdatePriority;
-  status?: ActionUpdateStatus;
-  dueDate?: string;
-  estimatedMinutes?: number;
+  /** @nullable */
+  dueDate?: string | null;
+  /** @nullable */
+  estimatedMinutes?: number | null;
   equipmentRequired?: boolean;
   contractorRequired?: boolean;
-  completionNote?: string;
-  waitingReason?: string;
-  cancellationReason?: string;
 }
 
 export type ActionStatusUpdateStatus = typeof ActionStatusUpdateStatus[keyof typeof ActionStatusUpdateStatus];
@@ -640,6 +683,7 @@ export interface NoteInput {
   body: string;
   observationId?: number;
   actionId?: number;
+  offlineId?: string;
 }
 
 export interface DashboardSummary {
@@ -796,6 +840,11 @@ limit?: number;
 };
 
 export type GetReportSummaryParams = {
+dateFrom: string;
+dateTo: string;
+};
+
+export type ExportReportCsvParams = {
 dateFrom: string;
 dateTo: string;
 };

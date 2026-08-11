@@ -38,6 +38,7 @@ export interface Observation {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   actionCount?: number;
   propertyId?: number;

@@ -10,6 +10,7 @@ export const notesTable = pgTable("notes", {
   observationId: integer("observation_id").references(() => observationsTable.id),
   actionId: integer("action_id").references(() => actionsTable.id),
   body: text("body").notNull(),
+  offlineId: text("offline_id"),
   createdByUserId: integer("created_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

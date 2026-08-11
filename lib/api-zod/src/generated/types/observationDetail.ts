@@ -41,6 +41,7 @@ export interface ObservationDetail {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   propertyId?: number;
   createdAt: string;

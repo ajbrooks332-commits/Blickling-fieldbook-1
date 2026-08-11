@@ -13,7 +13,8 @@ delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
 
 import { useListCategories, useListLocations } from "@workspace/api-client-react"
-import { X, MapPin, SlidersHorizontal } from "lucide-react"
+import { Crosshair, X, MapPin, SlidersHorizontal } from "lucide-react"
+import { apiFetch } from "@/lib/api"
 
 const C = {
   bg: "#0d1117",
@@ -289,11 +290,15 @@ export default function MapView() {
   const mapRef = useRef<L.Map | null>(null)
   const clusterGroupRef = useRef<L.MarkerClusterGroup | null>(null)
   const userMarkerRef = useRef<L.CircleMarker | null>(null)
+  const requestRef = useRef<AbortController | null>(null)
 
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
   const [markers, setMarkers] = useState<MapMarker[]>([])
   const [loading, setLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [truncated, setTruncated] = useState(false)
+  const [totalMarkers, setTotalMarkers] = useState(0)
 
   const { data: categories = [] } = useListCategories()
   const { data: locations = [] } = useListLocations()
@@ -322,27 +327,6 @@ export default function MapView() {
     mapRef.current = map
     clusterGroupRef.current = clusterGroup
 
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const { latitude, longitude } = pos.coords
-          if (userMarkerRef.current) userMarkerRef.current.remove()
-          const dot = L.circleMarker([latitude, longitude], {
-            radius: 8,
-            fillColor: '#3b82f6',
-            color: '#fff',
-            weight: 2,
-            opacity: 1,
-            fillOpacity: 0.9,
-          })
-            .bindTooltip('Your location', { direction: 'top' })
-            .addTo(map)
-          userMarkerRef.current = dot
-        },
-        () => { /* silently ignore */ }
-      )
-    }
-
     return () => {
       map.remove()
       mapRef.current = null
@@ -351,20 +335,36 @@ export default function MapView() {
   }, [])
 
   const fetchMarkers = useCallback(async () => {
-    setLoading(true)
+    requestRef.current?.abort()
+    const controller = new AbortController(); requestRef.current = controller
+    setLoading(true); setError(null)
     try {
       const qs = buildQueryString(filters)
-      const res = await fetch('/api/observations/map' + (qs ? '?' + qs : ''))
-      if (!res.ok) throw new Error('Failed to fetch map markers')
+      const res = await apiFetch('/api/observations/map' + (qs ? '?' + qs : ''), { signal: controller.signal })
+      if (!res.ok) throw new Error((await res.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map observations could not be loaded.')
       const data: MapMarker[] = await res.json()
       setMarkers(data)
+      setTotalMarkers(Number(res.headers.get("X-Total-Count") ?? data.length))
+      setTruncated(res.headers.get("X-Result-Truncated") === "true")
     } catch (err) {
-      console.error('Map fetch error:', err)
-      setMarkers([])
+      if (err instanceof DOMException && err.name === "AbortError") return
+      setError(err instanceof Error ? err.message : "Map observations could not be loaded.")
     } finally {
-      setLoading(false)
+      if (requestRef.current === controller) setLoading(false)
     }
   }, [filters])
+
+  const locateMe = () => {
+    if (!navigator.geolocation || !mapRef.current) return setError("Location is unavailable on this device.")
+    setError(null)
+    navigator.geolocation.getCurrentPosition((position) => {
+      const point: L.LatLngExpression = [position.coords.latitude, position.coords.longitude]
+      userMarkerRef.current?.remove()
+      userMarkerRef.current = L.circleMarker(point, { radius: 8, fillColor: '#3b82f6', color: '#fff', weight: 2, fillOpacity: 0.9 })
+        .bindTooltip('Your location', { direction: 'top' }).addTo(mapRef.current!)
+      mapRef.current?.setView(point, Math.max(mapRef.current.getZoom(), 16))
+    }, () => setError("Your location could not be obtained. Check this site’s location permission."), { enableHighAccuracy: true, timeout: 10000 })
+  }
 
   useEffect(() => {
     fetchMarkers()
@@ -430,6 +430,7 @@ export default function MapView() {
           style={{ background: C.surface, borderBottom: `1px solid ${C.border}` }}
         >
           <div className="flex items-center gap-2">
+            <button type="button" onClick={locateMe} className="flex items-center gap-1 rounded-md border px-2 py-1.5 text-xs" aria-label="Show my location"><Crosshair className="h-4 w-4" /> Locate me</button>
             {loading ? (
               <div className="flex gap-1">
                 {[0, 1, 2].map(i => (
@@ -498,6 +499,8 @@ export default function MapView() {
             </button>
           </div>
         </div>
+        {error && <div role="alert" className="z-10 border-b border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
+        {truncated && <div role="status" className="z-10 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Showing the newest {markers.length} of {totalMarkers} matching observations. Narrow the filters to see a complete set.</div>}
 
         {/* Map container */}
         <div className="relative flex-1">

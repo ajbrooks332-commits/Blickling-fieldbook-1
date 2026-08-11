@@ -1,12 +1,14 @@
 import React, { useState, useEffect } from "react"
-import { useGetObservation, useCreateAction, useUpdateObservationStatus, useCreateNote, getGetObservationQueryKey } from "@workspace/api-client-react"
-import { useParams, useLocation, Link } from "wouter"
+import { useGetObservation, useUpdateObservationStatus, useCreateNote, getGetObservationQueryKey, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react"
+import { useParams, useLocation, useSearch, Link } from "wouter"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
-import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Edit, CheckCircle2, AlertCircle, Map, MessageSquare, ChevronRight, Camera, ArrowLeft, ShieldAlert, Activity } from "lucide-react"
+import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Edit, CheckCircle2, AlertCircle, Map, MessageSquare, ChevronRight, Camera, ArrowLeft, ShieldAlert, Activity, Archive } from "lucide-react"
 import { formatShortDate, formatDate, getInitials } from "@/lib/utils"
 import { useQueryClient } from "@tanstack/react-query"
 import PhotoGallery from "@/components/PhotoGallery"
-import PhotoUpload from "@/components/PhotoUpload"
+import PhotoUpload, { type PhotoUploadResult } from "@/components/PhotoUpload"
+import { apiFetch, apiJson } from "@/lib/api"
+import { queueNote, queuePhoto, queueStatusUpdate, uploadPhoto } from "@/lib/offline"
 
 const C = {
   bg: "#0d1117",
@@ -71,6 +73,13 @@ interface ObservationImage {
   originalFilename: string
   caption?: string | null
   mimeType: string
+  uploadedByUserId?: number
+}
+
+const OBSERVATION_TRANSITIONS: Record<string, string[]> = {
+  draft: ["submitted", "cancelled"], submitted: ["under_review", "action_required", "monitoring", "resolved", "cancelled"],
+  under_review: ["action_required", "monitoring", "resolved", "cancelled"], action_required: ["monitoring", "resolved", "cancelled"],
+  monitoring: ["action_required", "resolved", "cancelled"], resolved: ["monitoring", "closed"], closed: ["monitoring"], cancelled: ["submitted"],
 }
 
 const PriorityIcon = ({ p, size = 4 }: { p: string; size?: number }) => {
@@ -124,31 +133,39 @@ export default function ObservationDetail() {
   const params = useParams<{ id: string }>()
   const id = Number(params.id)
   const [, setLocation] = useLocation()
+  const search = useSearch()
+  const initialPhotoUploadFailed = new URLSearchParams(search).get("photoUploadFailed") === "1"
   const queryClient = useQueryClient()
 
-  const { data: obs, isLoading } = useGetObservation(id, { query: { enabled: !!id, queryKey: getGetObservationQueryKey(id) } })
+  const { data: obs, isLoading, error: loadError } = useGetObservation(id, { query: { enabled: !!id, queryKey: getGetObservationQueryKey(id) } })
+  const { data: me } = useGetMe({ query: { queryKey: getGetMeQueryKey() } })
+  const isManager = me?.role === "administrator" || me?.role === "manager"
+  const isAdmin = me?.role === "administrator"
   const updateStatus = useUpdateObservationStatus()
   const createNote = useCreateNote()
 
   const [noteOpen, setNoteOpen] = useState(false)
   const [noteBody, setNoteBody] = useState("")
   const [noteBodyFocused, setNoteBodyFocused] = useState(false)
+  const [noteSaving, setNoteSaving] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
 
   const [images, setImages] = useState<ObservationImage[]>([])
   const [imagesLoading, setImagesLoading] = useState(false)
+  const [photoError, setPhotoError] = useState<string | null>(null)
+  const [archiveOpen, setArchiveOpen] = useState(false)
+  const [archiving, setArchiving] = useState(false)
+  const [requestError, setRequestError] = useState<string | null>(null)
+  const [statusMessage, setStatusMessage] = useState<string | null>(null)
 
   const fetchImages = async () => {
     if (!id) return
     setImagesLoading(true)
+    setPhotoError(null)
     try {
-      const res = await fetch(`/api/observations/${id}/images`)
-      if (res.ok) {
-        const data = await res.json()
-        setImages(Array.isArray(data) ? data : (data.images || []))
-      }
-    } catch {
-      // silently fail
+      setImages(await apiJson<ObservationImage[]>(`/api/observations/${id}/images`))
+    } catch (error) {
+      setPhotoError(error instanceof Error ? error.message : "Photos could not be loaded.")
     } finally {
       setImagesLoading(false)
     }
@@ -158,21 +175,46 @@ export default function ObservationDetail() {
     if (id) fetchImages()
   }, [id])
 
-  const handlePhotoUploaded = async (image: { storageKey: string; originalFilename: string; mimeType: string; fileSize: number }) => {
-    await fetch(`/api/observations/${id}/images`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...image, imageType: 'observation' })
-    })
-    fetchImages()
+  const handlePhotoUploaded = async (image: PhotoUploadResult) => {
+    setPhotoError(null)
+    if (!me) return setPhotoError("Your session could not be verified. Reload the app and try again.")
+    try {
+      if (!navigator.onLine) {
+        await queuePhoto("observations", id, image, me.id)
+      } else {
+        await uploadPhoto("observations", id, image)
+        await fetchImages()
+      }
+    } catch (error) {
+      if (error instanceof TypeError) {
+        try { await queuePhoto("observations", id, image, me.id) }
+        catch { setPhotoError("The photo could not be saved on this device.") }
+      } else setPhotoError(error instanceof Error ? error.message : "Photo could not be added.")
+    } finally {
+      if (image.previewUrl) URL.revokeObjectURL(image.previewUrl)
+    }
   }
 
   const handleDeleteImage = async (imageId: number) => {
-    await fetch(`/api/observations/${id}/images/${imageId}`, { method: 'DELETE' })
-    setImages(prev => prev.filter(img => img.id !== imageId))
+    setPhotoError(null)
+    try {
+      const response = await apiFetch(`/api/observations/${id}/images/${imageId}`, { method: "DELETE" })
+      if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "Photo could not be deleted.")
+      setImages(prev => prev.filter(img => img.id !== imageId))
+    } catch (error) { setPhotoError(error instanceof Error ? error.message : "Photo could not be deleted.") }
   }
 
-  if (isLoading || !obs) {
+  const archiveObservation = async () => {
+    setArchiving(true); setRequestError(null)
+    try {
+      const response = await apiFetch(`/api/observations/${id}`, { method: "DELETE" })
+      if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "Observation could not be archived.")
+      setLocation("/observations")
+    } catch (error) { setRequestError(error instanceof Error ? error.message : "Observation could not be archived.") }
+    finally { setArchiving(false) }
+  }
+
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center p-12 gap-2">
         <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
@@ -181,38 +223,60 @@ export default function ObservationDetail() {
       </div>
     )
   }
+  if (loadError || !obs) return <div role="alert" className="rounded-md border border-destructive/30 p-4">Observation could not be loaded.</div>
 
-  const handleAddNote = (e: React.FormEvent) => {
+  const handleAddNote = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!noteBody.trim()) return
-    createNote.mutate(
-      { data: { body: noteBody, observationId: id } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetObservationQueryKey(id) })
-          setNoteOpen(false)
-          setNoteBody("")
-        }
-      }
-    )
+    if (!noteBody.trim() || noteSaving) return
+    if (!me) return setStatusMessage("Your session could not be verified. Reload the app and try again.")
+    setNoteSaving(true); setStatusMessage(null)
+    const payload = { body: noteBody.trim(), observationId: id, offlineId: crypto.randomUUID() }
+    const queue = async () => {
+      try { await queueNote(payload, me.id); setStatusMessage("Note queued and will sync when the connection returns."); return true }
+      catch { setStatusMessage("The note could not be saved on this device."); return false }
+    }
+    let saved = false
+    if (!navigator.onLine) saved = await queue()
+    else {
+      try { await createNote.mutateAsync({ data: payload }); await queryClient.invalidateQueries({ queryKey: getGetObservationQueryKey(id) }); saved = true }
+      catch (error) { if (error instanceof TypeError) saved = await queue(); else setStatusMessage(error instanceof Error ? error.message : "Note could not be added.") }
+    }
+    if (saved) { setNoteOpen(false); setNoteBody("") }
+    setNoteSaving(false)
   }
 
-  const handleStatusUpdate = (newStatus: string) => {
-    updateStatus.mutate(
-      { id, data: { status: newStatus } },
-      {
-        onSuccess: () => {
-          queryClient.invalidateQueries({ queryKey: getGetObservationQueryKey(id) })
-          setStatusOpen(false)
-        }
+  const handleStatusUpdate = async (newStatus: string) => {
+    setStatusMessage(null)
+    if (!me) return setStatusMessage("Your session could not be verified. Reload the app and try again.")
+    const payload = { status: newStatus }
+    const queue = async () => {
+      try {
+        await queueStatusUpdate("observations", id, payload, me.id)
+        setStatusMessage("Status change queued and will sync when the connection returns.")
+        setStatusOpen(false)
+      } catch {
+        setStatusMessage("The status change could not be saved on this device.")
       }
-    )
+    }
+    if (!navigator.onLine) return void await queue()
+    try {
+      await updateStatus.mutateAsync({ id, data: payload })
+      await queryClient.invalidateQueries({ queryKey: getGetObservationQueryKey(id) })
+      setStatusOpen(false)
+    } catch (error) {
+      if (error instanceof TypeError) await queue()
+      else setStatusMessage(error instanceof Error ? error.message : "Status could not be updated.")
+    }
   }
 
   const pc = priorityConfig(obs.priority)
 
   return (
     <div style={{ maxWidth: 900, margin: "0 auto", paddingBottom: 48 }}>
+      {initialPhotoUploadFailed && <div role="alert" className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">
+        The observation was saved, but one or more photos could not be uploaded or queued. Add them again below.
+      </div>}
+      {statusMessage && <div role="status" className="mb-4 rounded-md border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-amber-200">{statusMessage}</div>}
 
       {/* Sticky header bar */}
       <div
@@ -260,7 +324,7 @@ export default function ObservationDetail() {
         {obs.status === "action_required" && obs.actions && obs.actions.length > 0 ? (
           obs.actions.length === 1 ? (
             <button
-              onClick={() => setLocation(`/actions/${obs.actions[0].id}`)}
+              onClick={() => setLocation(`/actions/${obs.actions![0]!.id}`)}
               style={{
                 background: statusBg(obs.status),
                 color: statusColor(obs.status),
@@ -330,7 +394,7 @@ export default function ObservationDetail() {
         </span>
 
         {/* Actions: Edit + Create Action */}
-        <div className="flex gap-2 ml-auto">
+        {isManager && <div className="flex gap-2 ml-auto">
           <button
             onClick={() => setLocation(`/observations/${id}/edit`)}
             className="flex items-center gap-1.5"
@@ -367,7 +431,11 @@ export default function ObservationDetail() {
           >
             Create Action
           </button>
-        </div>
+          {isAdmin && <button type="button" onClick={() => setArchiveOpen(true)} className="flex items-center gap-1.5"
+            style={{ background: C.urgentTint, border: `1px solid rgba(248,81,73,0.3)`, borderRadius: "0.5rem", color: C.urgent, fontSize: 13, padding: "5px 12px", ...HEAD }}>
+            <Archive className="w-3.5 h-3.5" /> Archive
+          </button>}
+        </div>}
       </div>
 
       {/* Title with priority left border */}
@@ -547,7 +615,8 @@ export default function ObservationDetail() {
               <CardHeadTitle>Photographs</CardHeadTitle>
             </CardHead>
             <div style={{ padding: 16 }} className="space-y-4">
-              <PhotoUpload onUploaded={handlePhotoUploaded} label="Add Photo" />
+              <PhotoUpload onUploaded={handlePhotoUploaded} label="Add Photo" deferUpload />
+              {photoError && <p role="alert" className="text-sm text-red-400">{photoError}</p>}
               {imagesLoading ? (
                 <div className="flex justify-center items-center py-4 gap-2">
                   <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
@@ -555,7 +624,7 @@ export default function ObservationDetail() {
                   <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "300ms" }} />
                 </div>
               ) : (
-                <PhotoGallery images={images} onDelete={handleDeleteImage} editable={true} />
+                <PhotoGallery images={images} onDelete={handleDeleteImage} editable canDelete={(image) => Boolean(isManager || image.uploadedByUserId === me?.id)} />
               )}
             </div>
           </SectionCard>
@@ -577,7 +646,7 @@ export default function ObservationDetail() {
                 }}
               >
                 <p style={{ ...BODY, color: C.muted, fontSize: 13, margin: 0 }}>No actions created for this observation yet.</p>
-                <button
+                {isManager && <button
                   onClick={() => setLocation(`/actions/new?observationId=${id}`)}
                   style={{
                     background: "transparent",
@@ -590,7 +659,7 @@ export default function ObservationDetail() {
                   }}
                 >
                   Create the first action →
-                </button>
+                </button>}
               </div>
             ) : (
               <div className="space-y-3">
@@ -644,7 +713,7 @@ export default function ObservationDetail() {
               <CardHeadTitle>Workflow</CardHeadTitle>
             </CardHead>
             <div style={{ padding: 12 }} className="space-y-2">
-              <button
+              {isManager && <button
                 onClick={() => setStatusOpen(true)}
                 className="w-full flex items-center gap-2"
                 style={{
@@ -662,7 +731,7 @@ export default function ObservationDetail() {
                 onMouseLeave={e => { (e.currentTarget as HTMLButtonElement).style.background = C.borderMid }}
               >
                 <CheckCircle2 className="w-4 h-4" style={{ color: C.emerald }} /> Change Status
-              </button>
+              </button>}
               <button
                 onClick={() => setNoteOpen(true)}
                 className="w-full flex items-center gap-2"
@@ -767,7 +836,7 @@ export default function ObservationDetail() {
                     }}
                   />
                   {obs.auditEvents.map(evt => {
-                    const evtColor = evt.eventType === 'STATUS_CHANGE' ? statusColor(evt.newValue || '') : C.emerald
+                    const evtColor = evt.eventType === 'status_changed' ? statusColor(evt.newValue || '') : C.emerald
                     return (
                       <div key={evt.id} className="relative flex items-start gap-3 pl-5">
                         {/* Dot */}
@@ -786,7 +855,7 @@ export default function ObservationDetail() {
                         />
                         <div>
                           <div style={{ ...BODY, color: C.text, fontSize: 12, fontWeight: 500 }}>
-                            {evt.eventType === 'STATUS_CHANGE' ? (
+                            {evt.eventType === 'status_changed' ? (
                               <span>
                                 Status →{" "}
                                 <span
@@ -870,21 +939,21 @@ export default function ObservationDetail() {
               </button>
               <button
                 type="submit"
-                disabled={createNote.isPending || !noteBody.trim()}
+                disabled={noteSaving || !noteBody.trim()}
                 style={{
-                  background: createNote.isPending || !noteBody.trim() ? C.emeraldDim : C.emerald,
+                  background: noteSaving || !noteBody.trim() ? C.emeraldDim : C.emerald,
                   border: "none",
                   borderRadius: "0.5rem",
                   color: "#fff",
                   fontSize: 13,
                   fontWeight: 600,
                   padding: "7px 16px",
-                  cursor: createNote.isPending || !noteBody.trim() ? "not-allowed" : "pointer",
-                  opacity: createNote.isPending || !noteBody.trim() ? 0.6 : 1,
+                  cursor: noteSaving || !noteBody.trim() ? "not-allowed" : "pointer",
+                  opacity: noteSaving || !noteBody.trim() ? 0.6 : 1,
                   ...HEAD,
                 }}
               >
-                {createNote.isPending ? "Adding..." : "Add Note"}
+                {noteSaving ? "Adding..." : "Add Note"}
               </button>
             </DialogFooter>
           </form>
@@ -892,13 +961,13 @@ export default function ObservationDetail() {
       </Dialog>
 
       {/* Change Status Dialog */}
-      <Dialog open={statusOpen} onOpenChange={setStatusOpen}>
+      <Dialog open={statusOpen && Boolean(isManager)} onOpenChange={setStatusOpen}>
         <DialogContent style={{ background: C.surface, border: `1px solid ${C.border}` }}>
           <DialogHeader>
             <DialogTitle style={{ ...HEAD, color: C.text }}>Change Status</DialogTitle>
           </DialogHeader>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2">
-            {['submitted', 'under_review', 'action_required', 'monitoring', 'resolved', 'closed', 'cancelled'].map(s => {
+            {(OBSERVATION_TRANSITIONS[obs.status] ?? []).map(s => {
               const isActive = obs.status === s
               return (
                 <button
@@ -925,6 +994,13 @@ export default function ObservationDetail() {
           </div>
         </DialogContent>
       </Dialog>
+      <Dialog open={archiveOpen} onOpenChange={setArchiveOpen}><DialogContent style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+        <DialogHeader><DialogTitle style={{ ...HEAD, color: C.text }}>Archive this observation?</DialogTitle></DialogHeader>
+        <p style={{ ...BODY, color: C.muted, fontSize: 14 }}>The observation and its linked actions will be removed from active views. Notes, photos and audit history will be retained.</p>
+        {requestError && <p role="alert" className="text-sm text-red-400">{requestError}</p>}
+        <DialogFooter><button type="button" onClick={() => setArchiveOpen(false)} className="rounded-md border px-4 py-2">Cancel</button>
+          <button type="button" onClick={() => void archiveObservation()} disabled={archiving} className="rounded-md bg-destructive px-4 py-2 text-destructive-foreground disabled:opacity-60">{archiving ? "Archiving…" : "Archive observation"}</button></DialogFooter>
+      </DialogContent></Dialog>
     </div>
   )
 }

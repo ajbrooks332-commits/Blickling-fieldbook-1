@@ -13,5 +13,6 @@ export interface AuthUser {
   email: string;
   role: AuthUserRole;
   propertyId: number;
-  active?: boolean;
+  active: boolean;
+  mustChangePassword: boolean;
 }

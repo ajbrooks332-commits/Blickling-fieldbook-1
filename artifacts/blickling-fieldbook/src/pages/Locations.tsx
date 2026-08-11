@@ -43,7 +43,7 @@ interface EditRowState {
 }
 
 export default function Locations() {
-  const { data: locations, isLoading } = useListLocations()
+  const { data: locations, isLoading, error: loadError } = useListLocations()
   const createLocation = useCreateLocation()
   const updateLocation = useUpdateLocation()
   const queryClient = useQueryClient()
@@ -52,8 +52,9 @@ export default function Locations() {
   const [newForm, setNewForm] = useState<EditRowState>({ name: "", description: "", latitude: "", longitude: "" })
   const [editingId, setEditingId] = useState<number | null>(null)
   const [editForm, setEditForm] = useState<EditRowState>({ name: "", description: "", latitude: "", longitude: "" })
+  const [requestError, setRequestError] = useState<string | null>(null)
 
-  if (isLoading || !locations) {
+  if (isLoading) {
     return (
       <div className="flex justify-center items-center" style={{ minHeight: 200 }}>
         <div className="flex gap-1.5">
@@ -68,9 +69,11 @@ export default function Locations() {
       </div>
     )
   }
+  if (loadError || !locations) return <div role="alert" className="rounded-md border border-destructive/30 p-4">Locations could not be loaded.</div>
 
   const handleCreate = (e: React.FormEvent) => {
     e.preventDefault()
+    setRequestError(null)
     if (!newForm.name.trim()) return
     const lat = newForm.latitude ? parseFloat(newForm.latitude) : undefined
     const lng = newForm.longitude ? parseFloat(newForm.longitude) : undefined
@@ -88,7 +91,7 @@ export default function Locations() {
           queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() })
           setCreateOpen(false)
           setNewForm({ name: "", description: "", latitude: "", longitude: "" })
-        },
+        }, onError: (error) => setRequestError(error instanceof Error ? error.message : "Location could not be created."),
       }
     )
   }
@@ -104,23 +107,26 @@ export default function Locations() {
   }
 
   const handleUpdate = (id: number) => {
+    setRequestError(null)
     const lat = editForm.latitude ? parseFloat(editForm.latitude) : undefined
     const lng = editForm.longitude ? parseFloat(editForm.longitude) : undefined
     updateLocation.mutate(
-      { id, data: { name: editForm.name, description: editForm.description || undefined, latitude: lat, longitude: lng } },
+      { id, data: { name: editForm.name, description: editForm.description || null, latitude: lat, longitude: lng } },
       {
         onSuccess: () => {
           queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() })
           setEditingId(null)
-        },
+        }, onError: (error) => setRequestError(error instanceof Error ? error.message : "Location could not be updated."),
       }
     )
   }
 
   const handleToggleActive = (id: number, active: boolean) => {
+    setRequestError(null)
     updateLocation.mutate(
       { id, data: { active: !active } },
-      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() }) }
+      { onSuccess: () => queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() }),
+        onError: (error) => setRequestError(error instanceof Error ? error.message : "Location status could not be changed.") }
     )
   }
 
@@ -128,10 +134,11 @@ export default function Locations() {
     label, value, onChange, placeholder, type = "text",
   }: { label: string; value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) => (
     <div className="space-y-1.5">
-      <label style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+      <label htmlFor={`location-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`} style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
         {label}
       </label>
       <input
+        id={`location-${label.toLowerCase().replace(/[^a-z]+/g, "-")}`}
         type={type}
         value={value}
         onChange={e => onChange(e.target.value)}
@@ -161,6 +168,7 @@ export default function Locations() {
           <Plus className="w-4 h-4" /> Add Location
         </button>
       </div>
+      {requestError && <p role="alert" className="rounded-md border border-destructive/30 p-3 text-sm text-destructive">{requestError}</p>}
 
       {/* Create form */}
       {createOpen && (

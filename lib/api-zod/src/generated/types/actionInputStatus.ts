@@ -12,8 +12,4 @@ export type ActionInputStatus = typeof ActionInputStatus[keyof typeof ActionInpu
 export const ActionInputStatus = {
   not_started: 'not_started',
   planned: 'planned',
-  in_progress: 'in_progress',
-  waiting: 'waiting',
-  completed: 'completed',
-  cancelled: 'cancelled',
 } as const;

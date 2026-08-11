@@ -23,6 +23,7 @@ export interface ObservationInput {
   safetyIssue?: boolean;
   publicAccessAffected?: boolean;
   machineryRequired?: boolean;
+  specialistRequired?: boolean;
   followUpRequired?: boolean;
   createdOffline?: boolean;
   offlineId?: string;
