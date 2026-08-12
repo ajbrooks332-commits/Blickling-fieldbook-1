@@ -259,6 +259,50 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS activity_logs_property_date_idx
     ON activity_logs(property_id, activity_date DESC) WHERE deleted_at IS NULL`,
+  `ALTER TABLE activity_types ADD COLUMN IF NOT EXISTS category text`,
+  // Categorise the built-in activity types (only where not already set by a manager).
+  `UPDATE activity_types SET category = CASE name
+      WHEN 'Strimming' THEN 'Grassland management'
+      WHEN 'Mowing' THEN 'Grassland management'
+      WHEN 'Hedge cutting' THEN 'Hedgerow management'
+      WHEN 'Tree work' THEN 'Tree safety'
+      WHEN 'Chipping' THEN 'Woodland management'
+      WHEN 'Fencing' THEN 'Estate maintenance'
+      WHEN 'Path maintenance' THEN 'Access & paths'
+      WHEN 'Litter picking' THEN 'Visitor & site care'
+      WHEN 'Planting' THEN 'Planting & establishment'
+      WHEN 'Watering' THEN 'Planting & establishment'
+      WHEN 'Machinery maintenance' THEN 'Machinery & equipment'
+      WHEN 'Patrol / inspection' THEN 'Patrols & inspections'
+      WHEN 'Visitor support' THEN 'Visitor & site care'
+      ELSE 'Other'
+    END
+    WHERE category IS NULL`,
+  // Reconcile case-variant duplicate activity types (e.g. "Strimming" vs "strimming"):
+  // repoint logs at the canonical (lowest-id) row, then drop the duplicates, then
+  // enforce case-insensitive uniqueness so the API can rely on it.
+  `UPDATE activity_logs SET activity_type_id = canon.id
+    FROM activity_types dupe
+    JOIN (SELECT property_id, lower(name) AS lname, min(id) AS id
+          FROM activity_types GROUP BY property_id, lower(name)) canon
+      ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+    WHERE activity_logs.activity_type_id = dupe.id AND dupe.id <> canon.id`,
+  `DELETE FROM activity_types dupe
+    USING (SELECT property_id, lower(name) AS lname, min(id) AS id
+           FROM activity_types GROUP BY property_id, lower(name)) canon
+    WHERE canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name) AND dupe.id <> canon.id`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS activity_types_property_lower_name_uq
+    ON activity_types(property_id, lower(name))`,
+  `CREATE TABLE IF NOT EXISTS activity_log_locations (
+    activity_log_id integer NOT NULL REFERENCES activity_logs(id) ON DELETE CASCADE,
+    named_location_id integer NOT NULL REFERENCES named_locations(id),
+    PRIMARY KEY (activity_log_id, named_location_id)
+  )`,
+  // Backfill: activities recorded with the old single-location column get a junction row.
+  `INSERT INTO activity_log_locations (activity_log_id, named_location_id)
+    SELECT id, named_location_id FROM activity_logs
+    WHERE named_location_id IS NOT NULL
+    ON CONFLICT DO NOTHING`,
   // Self-healing: keep reference counters at least as high as the largest issued reference,
   // so a lost/reset counter can never cause duplicate reference numbers.
   `INSERT INTO reference_counters (property_id, year, kind, value)

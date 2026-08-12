@@ -28,6 +28,7 @@ import type {
   ActionStatusUpdate,
   ActionUpdate,
   ActivityLogInput,
+  ActivityReport,
   ActivityType,
   ActivityTypeInput,
   Assignee,
@@ -40,6 +41,7 @@ import type {
   DashboardCharts,
   DashboardSummary,
   ExportReportCsvParams,
+  GetActivityReportParams,
   GetObservationMapDataParams,
   GetReportSummaryParams,
   HealthStatus,
@@ -2570,7 +2572,7 @@ export const getCreateActivityTypeUrl = () => {
 }
 
 /**
- * @summary Create an activity type (admin/manager)
+ * @summary Create (or reuse) an activity type
  */
 export const createActivityType = async (activityTypeInput: ActivityTypeInput, options?: RequestInit): Promise<ActivityType> => {
 
@@ -2619,7 +2621,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateActivityTypeMutationError = ErrorType<unknown>
 
     /**
- * @summary Create an activity type (admin/manager)
+ * @summary Create (or reuse) an activity type
  */
 export const useCreateActivityType = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createActivityType>>, TError,{data: BodyType<ActivityTypeInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
@@ -2786,6 +2788,90 @@ export const useCreateActivity = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getCreateActivityMutationOptions(options));
     }
+
+export const getGetActivityReportUrl = (params?: GetActivityReportParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/activities/report?${stringifiedParams}` : `/api/activities/report`
+}
+
+/**
+ * @summary Hours by activity type and category for a date range
+ */
+export const getActivityReport = async (params?: GetActivityReportParams, options?: RequestInit): Promise<ActivityReport> => {
+
+  return customFetch<ActivityReport>(getGetActivityReportUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetActivityReportQueryKey = (params?: GetActivityReportParams,) => {
+    return [
+    `/api/activities/report`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetActivityReportQueryOptions = <TData = Awaited<ReturnType<typeof getActivityReport>>, TError = ErrorType<unknown>>(params?: GetActivityReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActivityReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetActivityReportQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActivityReport>>> = ({ signal }) => getActivityReport(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getActivityReport>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetActivityReportQueryResult = NonNullable<Awaited<ReturnType<typeof getActivityReport>>>
+export type GetActivityReportQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Hours by activity type and category for a date range
+ */
+
+export function useGetActivityReport<TData = Awaited<ReturnType<typeof getActivityReport>>, TError = ErrorType<unknown>>(
+ params?: GetActivityReportParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActivityReport>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetActivityReportQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
 
 export const getDeleteActivityUrl = (id: number,) => {
 

@@ -12,4 +12,9 @@ export interface ActivityTypeInput {
      * @maxLength 200
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  category?: string;
 }

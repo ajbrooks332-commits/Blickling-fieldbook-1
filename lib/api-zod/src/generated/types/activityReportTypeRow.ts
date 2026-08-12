@@ -6,11 +6,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ActivityType {
-  id: number;
+export interface ActivityReportTypeRow {
+  activityTypeId: number;
   name: string;
-  /** @nullable */
-  category?: string | null;
-  sortOrder: number;
-  active: boolean;
+  category: string;
+  minutes: number;
+  count: number;
 }

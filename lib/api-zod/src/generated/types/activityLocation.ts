@@ -6,11 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ActivityType {
+export interface ActivityLocation {
   id: number;
   name: string;
-  /** @nullable */
-  category?: string | null;
-  sortOrder: number;
-  active: boolean;
 }

@@ -5,6 +5,7 @@
  * Blickling Fieldbook API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityLocation } from './activityLocation';
 import type { ActivityParticipant } from './activityParticipant';
 
 export interface ActivityLog {
@@ -12,9 +13,8 @@ export interface ActivityLog {
   activityTypeId: number;
   activityTypeName: string;
   /** @nullable */
-  namedLocationId?: number | null;
-  /** @nullable */
-  namedLocationName?: string | null;
+  activityCategory?: string | null;
+  locations: ActivityLocation[];
   activityDate: string;
   durationMinutes: number;
   /** @nullable */

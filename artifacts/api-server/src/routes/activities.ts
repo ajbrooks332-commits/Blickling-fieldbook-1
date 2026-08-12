@@ -3,17 +3,28 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import { z } from "zod";
 import {
   db, activityTypesTable, activityLogsTable, activityLogParticipantsTable,
-  namedLocationsTable, usersTable,
+  activityLogLocationsTable, namedLocationsTable, usersTable,
 } from "@workspace/db";
-import { requireAuth, requireRole } from "../lib/auth";
+import { requireAuth } from "../lib/auth";
 import { idSchema, optionalText, shortText, validationError } from "../lib/validation";
 
 const router = Router();
 
-const DEFAULT_ACTIVITY_TYPES = [
-  "Strimming", "Mowing", "Hedge cutting", "Tree work", "Fencing",
-  "Path maintenance", "Litter picking", "Planting", "Watering",
-  "Machinery maintenance", "Patrol / inspection", "Visitor support", "Other",
+const DEFAULT_ACTIVITY_TYPES: { name: string; category: string }[] = [
+  { name: "Strimming", category: "Grassland management" },
+  { name: "Mowing", category: "Grassland management" },
+  { name: "Hedge cutting", category: "Hedgerow management" },
+  { name: "Tree work", category: "Tree safety" },
+  { name: "Chipping", category: "Woodland management" },
+  { name: "Fencing", category: "Estate maintenance" },
+  { name: "Path maintenance", category: "Access & paths" },
+  { name: "Litter picking", category: "Visitor & site care" },
+  { name: "Planting", category: "Planting & establishment" },
+  { name: "Watering", category: "Planting & establishment" },
+  { name: "Machinery maintenance", category: "Machinery & equipment" },
+  { name: "Patrol / inspection", category: "Patrols & inspections" },
+  { name: "Visitor support", category: "Visitor & site care" },
+  { name: "Other", category: "Other" },
 ];
 
 const dateSchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Date must be YYYY-MM-DD")
@@ -30,7 +41,7 @@ const activityDateSchema = dateSchema.refine((value) => {
 
 const createSchema = z.object({
   activityTypeId: z.number().int().positive(),
-  namedLocationId: z.number().int().positive().optional().nullable(),
+  namedLocationIds: z.array(z.number().int().positive()).max(20).default([]),
   activityDate: activityDateSchema,
   durationMinutes: z.number().int().min(5).max(1440),
   participantUserIds: z.array(z.number().int().positive()).max(50).default([]),
@@ -47,7 +58,7 @@ const listQuerySchema = z.object({
 async function ensureDefaultTypes(propertyId: number): Promise<void> {
   // Idempotent: unique(property_id, name) means existing (even deactivated) defaults are left untouched.
   await db.insert(activityTypesTable)
-    .values(DEFAULT_ACTIVITY_TYPES.map((name, index) => ({ propertyId, name, sortOrder: index })))
+    .values(DEFAULT_ACTIVITY_TYPES.map(({ name, category }, index) => ({ propertyId, name, category, sortOrder: index })))
     .onConflictDoNothing();
 }
 
@@ -60,18 +71,39 @@ router.get("/activity-types", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-router.post("/activity-types", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
-  const parsed = z.object({ name: shortText }).strict().safeParse(req.body);
+// Any signed-in user may add a custom activity type (typed in from the quick-add form).
+router.post("/activity-types", requireAuth, async (req, res) => {
+  const parsed = z.object({ name: shortText, category: shortText.optional() }).strict().safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error);
   const propertyId = req.authUser!.propertyId!;
-  const [duplicate] = await db.select({ id: activityTypesTable.id }).from(activityTypesTable)
-    .where(and(eq(activityTypesTable.propertyId, propertyId), eq(activityTypesTable.name, parsed.data.name))).limit(1);
-  if (duplicate) return void res.status(409).json({ error: "An activity type with this name already exists" });
-  const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${activityTypesTable.sortOrder}), 0)` })
-    .from(activityTypesTable).where(eq(activityTypesTable.propertyId, propertyId));
-  const [row] = await db.insert(activityTypesTable)
-    .values({ propertyId, name: parsed.data.name, sortOrder: Number(max) + 1 }).returning();
-  res.status(201).json(row);
+  const name = parsed.data.name.trim();
+  if (!name) return void res.status(400).json({ error: "Activity name is required" });
+  const findExisting = async () => {
+    const [row] = await db.select().from(activityTypesTable)
+      .where(and(eq(activityTypesTable.propertyId, propertyId), sql`lower(${activityTypesTable.name}) = lower(${name})`)).limit(1);
+    return row;
+  };
+  let existing = await findExisting();
+  if (!existing) {
+    const [{ max }] = await db.select({ max: sql<number>`coalesce(max(${activityTypesTable.sortOrder}), 0)` })
+      .from(activityTypesTable).where(eq(activityTypesTable.propertyId, propertyId));
+    // Case-insensitive uniqueness is enforced by a DB index; ON CONFLICT DO NOTHING
+    // makes concurrent same-name requests safe — the loser falls through to reuse.
+    const [inserted] = await db.insert(activityTypesTable)
+      .values({ propertyId, name, category: parsed.data.category?.trim() || "Other", sortOrder: Number(max) + 1 })
+      .onConflictDoNothing().returning();
+    if (inserted) return void res.status(201).json(inserted);
+    existing = await findExisting();
+    if (!existing) return void res.status(500).json({ error: "Could not create activity type" });
+  }
+  // Reuse (and reactivate) an existing type of the same name instead of rejecting —
+  // the quick-add flow just needs a usable type back.
+  if (!existing.active) {
+    const [reactivated] = await db.update(activityTypesTable).set({ active: true })
+      .where(eq(activityTypesTable.id, existing.id)).returning();
+    return void res.status(200).json(reactivated);
+  }
+  res.status(200).json(existing);
 });
 
 async function loadParticipants(activityLogIds: number[]) {
@@ -83,6 +115,24 @@ async function loadParticipants(activityLogIds: number[]) {
     .innerJoin(usersTable, eq(usersTable.id, activityLogParticipantsTable.userId))
     .where(inArray(activityLogParticipantsTable.activityLogId, activityLogIds))
     .orderBy(asc(usersTable.name));
+  const map = new Map<number, { id: number; name: string }[]>();
+  for (const row of rows) {
+    const list = map.get(row.activityLogId) ?? [];
+    list.push({ id: row.id, name: row.name });
+    map.set(row.activityLogId, list);
+  }
+  return map;
+}
+
+async function loadLocations(activityLogIds: number[]) {
+  if (activityLogIds.length === 0) return new Map<number, { id: number; name: string }[]>();
+  const rows = await db.select({
+    activityLogId: activityLogLocationsTable.activityLogId,
+    id: namedLocationsTable.id, name: namedLocationsTable.name,
+  }).from(activityLogLocationsTable)
+    .innerJoin(namedLocationsTable, eq(namedLocationsTable.id, activityLogLocationsTable.namedLocationId))
+    .where(inArray(activityLogLocationsTable.activityLogId, activityLogIds))
+    .orderBy(asc(namedLocationsTable.name));
   const map = new Map<number, { id: number; name: string }[]>();
   for (const row of rows) {
     const list = map.get(row.activityLogId) ?? [];
@@ -111,8 +161,7 @@ router.get("/activities", requireAuth, async (req, res) => {
       id: activityLogsTable.id,
       activityTypeId: activityLogsTable.activityTypeId,
       activityTypeName: activityTypesTable.name,
-      namedLocationId: activityLogsTable.namedLocationId,
-      namedLocationName: namedLocationsTable.name,
+      activityCategory: activityTypesTable.category,
       activityDate: activityLogsTable.activityDate,
       durationMinutes: activityLogsTable.durationMinutes,
       notes: activityLogsTable.notes,
@@ -121,34 +170,78 @@ router.get("/activities", requireAuth, async (req, res) => {
       createdAt: activityLogsTable.createdAt,
     }).from(activityLogsTable)
       .innerJoin(activityTypesTable, eq(activityTypesTable.id, activityLogsTable.activityTypeId))
-      .leftJoin(namedLocationsTable, eq(namedLocationsTable.id, activityLogsTable.namedLocationId))
       .innerJoin(recordedBy, eq(recordedBy.id, activityLogsTable.recordedByUserId))
       .where(where)
       .orderBy(desc(activityLogsTable.activityDate), desc(activityLogsTable.createdAt))
       .limit(limit).offset((page - 1) * limit),
     db.select({ total: sql<number>`count(*)` }).from(activityLogsTable).where(where),
   ]);
-  const participants = await loadParticipants(rows.map((r) => r.id));
+  const ids = rows.map((r) => r.id);
+  const [participants, locationMap] = await Promise.all([loadParticipants(ids), loadLocations(ids)]);
   res.json({
-    activities: rows.map((row) => ({ ...row, participants: participants.get(row.id) ?? [] })),
+    activities: rows.map((row) => ({
+      ...row,
+      participants: participants.get(row.id) ?? [],
+      locations: locationMap.get(row.id) ?? [],
+    })),
     total: Number(total), page, limit,
   });
+});
+
+// Summary report: hours by activity type and by broad category, for export/visualisation.
+router.get("/activities/report", requireAuth, async (req, res) => {
+  const parsed = z.object({ from: dateSchema.optional(), to: dateSchema.optional() }).strict().safeParse(req.query);
+  if (!parsed.success) return validationError(res, parsed.error);
+  const { from, to } = parsed.data;
+  const propertyId = req.authUser!.propertyId!;
+  const where = and(
+    eq(activityLogsTable.propertyId, propertyId),
+    isNull(activityLogsTable.deletedAt),
+    ...(from ? [gte(activityLogsTable.activityDate, from)] : []),
+    ...(to ? [lte(activityLogsTable.activityDate, to)] : []),
+  );
+  const byType = await db.select({
+    activityTypeId: activityTypesTable.id,
+    name: activityTypesTable.name,
+    category: sql<string>`coalesce(${activityTypesTable.category}, 'Other')`,
+    minutes: sql<number>`sum(${activityLogsTable.durationMinutes})`,
+    count: sql<number>`count(*)`,
+  }).from(activityLogsTable)
+    .innerJoin(activityTypesTable, eq(activityTypesTable.id, activityLogsTable.activityTypeId))
+    .where(where)
+    .groupBy(activityTypesTable.id, activityTypesTable.name, activityTypesTable.category)
+    .orderBy(desc(sql`sum(${activityLogsTable.durationMinutes})`));
+  const categoryTotals = new Map<string, { minutes: number; count: number }>();
+  let totalMinutes = 0, totalCount = 0;
+  const typeRows = byType.map((r) => {
+    const minutes = Number(r.minutes), count = Number(r.count);
+    totalMinutes += minutes; totalCount += count;
+    const cat = categoryTotals.get(r.category) ?? { minutes: 0, count: 0 };
+    cat.minutes += minutes; cat.count += count;
+    categoryTotals.set(r.category, cat);
+    return { activityTypeId: r.activityTypeId, name: r.name, category: r.category, minutes, count };
+  });
+  const byCategory = [...categoryTotals.entries()]
+    .map(([category, t]) => ({ category, minutes: t.minutes, count: t.count }))
+    .sort((a, b) => b.minutes - a.minutes);
+  res.json({ totalMinutes, totalCount, byType: typeRows, byCategory });
 });
 
 router.post("/activities", requireAuth, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error);
   const propertyId = req.authUser!.propertyId!;
-  const { activityTypeId, namedLocationId, activityDate, durationMinutes, participantUserIds, notes } = parsed.data;
+  const { activityTypeId, namedLocationIds, activityDate, durationMinutes, participantUserIds, notes } = parsed.data;
 
   const [type] = await db.select({ id: activityTypesTable.id }).from(activityTypesTable)
     .where(and(eq(activityTypesTable.id, activityTypeId), eq(activityTypesTable.propertyId, propertyId), eq(activityTypesTable.active, true))).limit(1);
   if (!type) return void res.status(400).json({ error: "Unknown activity type" });
 
-  if (namedLocationId != null) {
-    const [location] = await db.select({ id: namedLocationsTable.id }).from(namedLocationsTable)
-      .where(and(eq(namedLocationsTable.id, namedLocationId), eq(namedLocationsTable.propertyId, propertyId))).limit(1);
-    if (!location) return void res.status(400).json({ error: "Unknown location" });
+  const uniqueLocations = [...new Set(namedLocationIds)];
+  if (uniqueLocations.length > 0) {
+    const found = await db.select({ id: namedLocationsTable.id }).from(namedLocationsTable)
+      .where(and(inArray(namedLocationsTable.id, uniqueLocations), eq(namedLocationsTable.propertyId, propertyId)));
+    if (found.length !== uniqueLocations.length) return void res.status(400).json({ error: "Unknown location" });
   }
 
   const uniqueParticipants = [...new Set(participantUserIds)];
@@ -160,10 +253,15 @@ router.post("/activities", requireAuth, async (req, res) => {
 
   const created = await db.transaction(async (tx) => {
     const [row] = await tx.insert(activityLogsTable).values({
-      propertyId, activityTypeId, namedLocationId: namedLocationId ?? null,
+      // Legacy single-location column keeps the first pick for backwards compatibility.
+      propertyId, activityTypeId, namedLocationId: uniqueLocations[0] ?? null,
       activityDate, durationMinutes, notes: notes ?? null,
       recordedByUserId: req.authUser!.id,
     }).returning();
+    if (uniqueLocations.length > 0) {
+      await tx.insert(activityLogLocationsTable)
+        .values(uniqueLocations.map((namedLocationId) => ({ activityLogId: row.id, namedLocationId })));
+    }
     if (uniqueParticipants.length > 0) {
       await tx.insert(activityLogParticipantsTable)
         .values(uniqueParticipants.map((userId) => ({ activityLogId: row.id, userId })));

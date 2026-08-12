@@ -739,7 +739,7 @@ paths:
     post:
       operationId: createActivityType
       tags: [activities]
-      summary: Create an activity type (admin/manager)
+      summary: Create (or reuse) an activity type
       requestBody:
         required: true
         content:
@@ -747,6 +747,12 @@ paths:
             schema:
               $ref: "#/components/schemas/ActivityTypeInput"
       responses:
+        "200":
+          description: An existing type with the same name was reused (reactivated if needed)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityType"
         "201":
           description: Created
           content:
@@ -817,6 +823,28 @@ paths:
                 properties:
                   id:
                     type: integer
+
+  /activities/report:
+    get:
+      operationId: getActivityReport
+      tags: [activities]
+      summary: Hours by activity type and category for a date range
+      parameters:
+        - name: from
+          in: query
+          schema:
+            type: string
+        - name: to
+          in: query
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Activity report
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ActivityReport"
 
   /activities/{id}:
     delete:
@@ -1321,6 +1349,8 @@ components:
           type: integer
         name:
           type: string
+        category:
+          type: ["string", "null"]
         sortOrder:
           type: integer
         active:
@@ -1334,6 +1364,10 @@ components:
           type: string
           minLength: 1
           maxLength: 200
+        category:
+          type: string
+          minLength: 1
+          maxLength: 200
 
     ActivityParticipant:
       type: object
@@ -1344,9 +1378,61 @@ components:
         name:
           type: string
 
+    ActivityLocation:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+
+    ActivityReportTypeRow:
+      type: object
+      required: [activityTypeId, name, category, minutes, count]
+      properties:
+        activityTypeId:
+          type: integer
+        name:
+          type: string
+        category:
+          type: string
+        minutes:
+          type: integer
+        count:
+          type: integer
+
+    ActivityReportCategoryRow:
+      type: object
+      required: [category, minutes, count]
+      properties:
+        category:
+          type: string
+        minutes:
+          type: integer
+        count:
+          type: integer
+
+    ActivityReport:
+      type: object
+      required: [totalMinutes, totalCount, byType, byCategory]
+      properties:
+        totalMinutes:
+          type: integer
+        totalCount:
+          type: integer
+        byType:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityReportTypeRow"
+        byCategory:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityReportCategoryRow"
+
     ActivityLog:
       type: object
-      required: [id, activityTypeId, activityTypeName, activityDate, durationMinutes, recordedByUserId, recordedByName, participants, createdAt]
+      required: [id, activityTypeId, activityTypeName, activityDate, durationMinutes, recordedByUserId, recordedByName, participants, locations, createdAt]
       properties:
         id:
           type: integer
@@ -1354,10 +1440,12 @@ components:
           type: integer
         activityTypeName:
           type: string
-        namedLocationId:
-          type: ["integer", "null"]
-        namedLocationName:
+        activityCategory:
           type: ["string", "null"]
+        locations:
+          type: array
+          items:
+            $ref: "#/components/schemas/ActivityLocation"
         activityDate:
           type: string
         durationMinutes:
@@ -1381,8 +1469,11 @@ components:
       properties:
         activityTypeId:
           type: integer
-        namedLocationId:
-          type: ["integer", "null"]
+        namedLocationIds:
+          type: array
+          maxItems: 20
+          items:
+            type: integer
         activityDate:
           type: string
           pattern: "^\\d{4}-\\d{2}-\\d{2}$"

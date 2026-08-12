@@ -7,6 +7,7 @@ export const activityTypesTable = pgTable("activity_types", {
   id: serial("id").primaryKey(),
   propertyId: integer("property_id").references(() => propertiesTable.id),
   name: text("name").notNull(),
+  category: text("category"),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -30,6 +31,11 @@ export const activityLogParticipantsTable = pgTable("activity_log_participants",
   activityLogId: integer("activity_log_id").notNull().references(() => activityLogsTable.id, { onDelete: "cascade" }),
   userId: integer("user_id").notNull().references(() => usersTable.id),
 }, (table) => [primaryKey({ columns: [table.activityLogId, table.userId] })]);
+
+export const activityLogLocationsTable = pgTable("activity_log_locations", {
+  activityLogId: integer("activity_log_id").notNull().references(() => activityLogsTable.id, { onDelete: "cascade" }),
+  namedLocationId: integer("named_location_id").notNull().references(() => namedLocationsTable.id),
+}, (table) => [primaryKey({ columns: [table.activityLogId, table.namedLocationId] })]);
 
 export type ActivityType = typeof activityTypesTable.$inferSelect;
 export type ActivityLog = typeof activityLogsTable.$inferSelect;

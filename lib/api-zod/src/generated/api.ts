@@ -1060,6 +1060,7 @@ export const CreateNoteResponse = zod.object({
 export const ListActivityTypesResponseItem = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "category": zod.string().nullish(),
   "sortOrder": zod.number(),
   "active": zod.boolean()
 })
@@ -1067,19 +1068,23 @@ export const ListActivityTypesResponse = zod.array(ListActivityTypesResponseItem
 
 
 /**
- * @summary Create an activity type (admin/manager)
+ * @summary Create (or reuse) an activity type
  */
 export const createActivityTypeBodyNameMax = 200;
+
+export const createActivityTypeBodyCategoryMax = 200;
 
 
 
 export const CreateActivityTypeBody = zod.object({
-  "name": zod.string().min(1).max(createActivityTypeBodyNameMax)
+  "name": zod.string().min(1).max(createActivityTypeBodyNameMax),
+  "category": zod.string().min(1).max(createActivityTypeBodyCategoryMax).optional()
 })
 
 export const CreateActivityTypeResponse = zod.object({
   "id": zod.number(),
   "name": zod.string(),
+  "category": zod.string().nullish(),
   "sortOrder": zod.number(),
   "active": zod.boolean()
 })
@@ -1100,8 +1105,11 @@ export const ListActivitiesResponse = zod.object({
   "id": zod.number(),
   "activityTypeId": zod.number(),
   "activityTypeName": zod.string(),
-  "namedLocationId": zod.number().nullish(),
-  "namedLocationName": zod.string().nullish(),
+  "activityCategory": zod.string().nullish(),
+  "locations": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+})),
   "activityDate": zod.string(),
   "durationMinutes": zod.number(),
   "notes": zod.string().nullish(),
@@ -1122,6 +1130,8 @@ export const ListActivitiesResponse = zod.object({
 /**
  * @summary Record a daily activity
  */
+export const createActivityBodyNamedLocationIdsMax = 20;
+
 export const createActivityBodyActivityDateRegExp = new RegExp('^\\d{4}-\\d{2}-\\d{2}$');
 export const createActivityBodyDurationMinutesMin = 5;
 export const createActivityBodyDurationMinutesMax = 1440;
@@ -1134,7 +1144,7 @@ export const createActivityBodyNotesMax = 2000;
 
 export const CreateActivityBody = zod.object({
   "activityTypeId": zod.number(),
-  "namedLocationId": zod.number().nullish(),
+  "namedLocationIds": zod.array(zod.number()).max(createActivityBodyNamedLocationIdsMax).optional(),
   "activityDate": zod.string().regex(createActivityBodyActivityDateRegExp).describe('Calendar date (YYYY-MM-DD); must not be in the future.'),
   "durationMinutes": zod.number().min(createActivityBodyDurationMinutesMin).max(createActivityBodyDurationMinutesMax),
   "participantUserIds": zod.array(zod.number()).max(createActivityBodyParticipantUserIdsMax).optional(),
@@ -1143,6 +1153,32 @@ export const CreateActivityBody = zod.object({
 
 export const CreateActivityResponse = zod.object({
   "id": zod.number()
+})
+
+
+/**
+ * @summary Hours by activity type and category for a date range
+ */
+export const GetActivityReportQueryParams = zod.object({
+  "from": zod.coerce.string().optional(),
+  "to": zod.coerce.string().optional()
+})
+
+export const GetActivityReportResponse = zod.object({
+  "totalMinutes": zod.number(),
+  "totalCount": zod.number(),
+  "byType": zod.array(zod.object({
+  "activityTypeId": zod.number(),
+  "name": zod.string(),
+  "category": zod.string(),
+  "minutes": zod.number(),
+  "count": zod.number()
+})),
+  "byCategory": zod.array(zod.object({
+  "category": zod.string(),
+  "minutes": zod.number(),
+  "count": zod.number()
+}))
 })
 
 

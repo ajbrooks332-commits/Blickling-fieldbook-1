@@ -8,8 +8,8 @@
 
 export interface ActivityLogInput {
   activityTypeId: number;
-  /** @nullable */
-  namedLocationId?: number | null;
+  /** @maxItems 20 */
+  namedLocationIds?: number[];
   /**
      * Calendar date (YYYY-MM-DD); must not be in the future.
      * @pattern ^\d{4}-\d{2}-\d{2}$

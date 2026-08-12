@@ -208,6 +208,8 @@ export interface NamedLocationUpdate {
 export interface ActivityType {
   id: number;
   name: string;
+  /** @nullable */
+  category?: string | null;
   sortOrder: number;
   active: boolean;
 }
@@ -218,6 +220,11 @@ export interface ActivityTypeInput {
      * @maxLength 200
      */
   name: string;
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  category?: string;
 }
 
 export interface ActivityParticipant {
@@ -225,14 +232,39 @@ export interface ActivityParticipant {
   name: string;
 }
 
+export interface ActivityLocation {
+  id: number;
+  name: string;
+}
+
+export interface ActivityReportTypeRow {
+  activityTypeId: number;
+  name: string;
+  category: string;
+  minutes: number;
+  count: number;
+}
+
+export interface ActivityReportCategoryRow {
+  category: string;
+  minutes: number;
+  count: number;
+}
+
+export interface ActivityReport {
+  totalMinutes: number;
+  totalCount: number;
+  byType: ActivityReportTypeRow[];
+  byCategory: ActivityReportCategoryRow[];
+}
+
 export interface ActivityLog {
   id: number;
   activityTypeId: number;
   activityTypeName: string;
   /** @nullable */
-  namedLocationId?: number | null;
-  /** @nullable */
-  namedLocationName?: string | null;
+  activityCategory?: string | null;
+  locations: ActivityLocation[];
   activityDate: string;
   durationMinutes: number;
   /** @nullable */
@@ -245,8 +277,8 @@ export interface ActivityLog {
 
 export interface ActivityLogInput {
   activityTypeId: number;
-  /** @nullable */
-  namedLocationId?: number | null;
+  /** @maxItems 20 */
+  namedLocationIds?: number[];
   /**
      * Calendar date (YYYY-MM-DD); must not be in the future.
      * @pattern ^\d{4}-\d{2}-\d{2}$
@@ -916,6 +948,11 @@ export type ListActivities200 = {
 
 export type CreateActivity201 = {
   id: number;
+};
+
+export type GetActivityReportParams = {
+from?: string;
+to?: string;
 };
 
 export type GetReportSummaryParams = {
