@@ -287,6 +287,11 @@ const statements = [
           FROM activity_types GROUP BY property_id, lower(name)) canon
       ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
     WHERE activity_logs.activity_type_id = dupe.id AND dupe.id <> canon.id`,
+  // If any case-variant duplicate was active, keep the canonical row active.
+  `UPDATE activity_types SET active = true
+    FROM (SELECT property_id, lower(name) AS lname, min(id) AS id, bool_or(active) AS any_active
+          FROM activity_types GROUP BY property_id, lower(name)) canon
+    WHERE activity_types.id = canon.id AND canon.any_active AND NOT activity_types.active`,
   `DELETE FROM activity_types dupe
     USING (SELECT property_id, lower(name) AS lname, min(id) AS id
            FROM activity_types GROUP BY property_id, lower(name)) canon
@@ -303,6 +308,47 @@ const statements = [
     SELECT id, named_location_id FROM activity_logs
     WHERE named_location_id IS NOT NULL
     ON CONFLICT DO NOTHING`,
+  // Reconcile case-variant duplicate named locations, then enforce case-insensitive
+  // uniqueness so quick-add from the activity tracker is race-safe.
+  `UPDATE observations SET named_location_id = canon.id
+    FROM named_locations dupe
+    JOIN (SELECT property_id, lower(name) AS lname, min(id) AS id
+          FROM named_locations GROUP BY property_id, lower(name)) canon
+      ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+    WHERE observations.named_location_id = dupe.id AND dupe.id <> canon.id`,
+  `UPDATE activity_logs SET named_location_id = canon.id
+    FROM named_locations dupe
+    JOIN (SELECT property_id, lower(name) AS lname, min(id) AS id
+          FROM named_locations GROUP BY property_id, lower(name)) canon
+      ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+    WHERE activity_logs.named_location_id = dupe.id AND dupe.id <> canon.id`,
+  `INSERT INTO activity_log_locations (activity_log_id, named_location_id)
+    SELECT j.activity_log_id, canon.id
+    FROM activity_log_locations j
+    JOIN named_locations dupe ON dupe.id = j.named_location_id
+    JOIN (SELECT property_id, lower(name) AS lname, min(id) AS id
+          FROM named_locations GROUP BY property_id, lower(name)) canon
+      ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+    WHERE dupe.id <> canon.id
+    ON CONFLICT DO NOTHING`,
+  `DELETE FROM activity_log_locations j
+    USING named_locations dupe,
+          (SELECT property_id, lower(name) AS lname, min(id) AS id
+           FROM named_locations GROUP BY property_id, lower(name)) canon
+    WHERE j.named_location_id = dupe.id
+      AND canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+      AND dupe.id <> canon.id`,
+  // If any case-variant duplicate was active, keep the canonical row active.
+  `UPDATE named_locations SET active = true
+    FROM (SELECT property_id, lower(name) AS lname, min(id) AS id, bool_or(active) AS any_active
+          FROM named_locations GROUP BY property_id, lower(name)) canon
+    WHERE named_locations.id = canon.id AND canon.any_active AND NOT named_locations.active`,
+  `DELETE FROM named_locations dupe
+    USING (SELECT property_id, lower(name) AS lname, min(id) AS id
+           FROM named_locations GROUP BY property_id, lower(name)) canon
+    WHERE canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name) AND dupe.id <> canon.id`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS named_locations_property_lower_name_uq
+    ON named_locations(property_id, lower(name))`,
   // Self-healing: keep reference counters at least as high as the largest issued reference,
   // so a lost/reset counter can never cause duplicate reference numbers.
   `INSERT INTO reference_counters (property_id, year, kind, value)

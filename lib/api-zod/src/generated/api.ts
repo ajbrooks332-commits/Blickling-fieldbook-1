@@ -302,7 +302,7 @@ export const ListLocationsResponse = zod.array(ListLocationsResponseItem)
 
 
 /**
- * @summary Create a named location (admin/manager)
+ * @summary Create (or reuse) a named location
  */
 export const CreateLocationBody = zod.object({
   "name": zod.string(),

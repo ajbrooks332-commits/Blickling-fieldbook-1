@@ -1297,7 +1297,7 @@ export const getCreateLocationUrl = () => {
 }
 
 /**
- * @summary Create a named location (admin/manager)
+ * @summary Create (or reuse) a named location
  */
 export const createLocation = async (namedLocationInput: NamedLocationInput, options?: RequestInit): Promise<NamedLocation> => {
 
@@ -1346,7 +1346,7 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
     export type CreateLocationMutationError = ErrorType<unknown>
 
     /**
- * @summary Create a named location (admin/manager)
+ * @summary Create (or reuse) a named location
  */
 export const useCreateLocation = <TError = ErrorType<unknown>,
     TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createLocation>>, TError,{data: BodyType<NamedLocationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}

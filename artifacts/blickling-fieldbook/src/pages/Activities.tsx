@@ -1,9 +1,9 @@
 import React, { useMemo, useState } from "react"
 import { useQueryClient } from "@tanstack/react-query"
 import {
-  useCreateActivity, useCreateActivityType, useDeleteActivity, useGetActivityReport,
+  useCreateActivity, useCreateActivityType, useCreateLocation, useDeleteActivity, useGetActivityReport,
   useGetMe, useListActivities, useListActivityTypes, useListAssignees, useListLocations,
-  getListActivitiesQueryKey, getListActivityTypesQueryKey, getGetActivityReportQueryKey,
+  getListActivitiesQueryKey, getListActivityTypesQueryKey, getListLocationsQueryKey, getGetActivityReportQueryKey,
 } from "@workspace/api-client-react"
 import { BarChart3, Check, Clock, Download, Loader2, MapPin, PencilLine, Plus, Trash2, Users } from "lucide-react"
 
@@ -252,6 +252,8 @@ export default function Activities() {
   const [saved, setSaved] = useState(false)
   const [addingType, setAddingType] = useState(false)
   const [newTypeName, setNewTypeName] = useState("")
+  const [addingLocation, setAddingLocation] = useState(false)
+  const [newLocationName, setNewLocationName] = useState("")
 
   const { data: list, isLoading: listLoading } = useListActivities({ limit: 100 })
 
@@ -275,6 +277,15 @@ export default function Activities() {
     },
     onError: () => setError("Could not add that activity — please try again."),
   } })
+  const createLocation = useCreateLocation({ mutation: {
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() })
+      setLocationIds(ids => ids.includes(row.id) ? ids : [...ids, row.id])
+      setAddingLocation(false)
+      setNewLocationName("")
+    },
+    onError: () => setError("Could not add that location — please try again."),
+  } })
 
   const activeLocations = useMemo(() => (locations ?? []).filter(l => l.active), [locations])
 
@@ -288,6 +299,12 @@ export default function Activities() {
     const name = newTypeName.trim()
     if (!name) return
     createType.mutate({ data: { name } })
+  }
+
+  const submitNewLocation = () => {
+    const name = newLocationName.trim()
+    if (!name) return
+    createLocation.mutate({ data: { name } })
   }
 
   const submit = () => {
@@ -397,8 +414,32 @@ export default function Activities() {
                 {l.name}
               </Chip>
             ))}
-            {activeLocations.length === 0 && <span style={{ color: C.dim, fontSize: 13 }}>No locations set up yet — optional</span>}
+            <Chip selected={addingLocation} onClick={() => { setAddingLocation(!addingLocation); setNewLocationName("") }}>
+              <PencilLine size={13} />Somewhere else…
+            </Chip>
           </div>
+          {addingLocation && (
+            <div style={{ display: "flex", gap: 8, marginTop: 10, flexWrap: "wrap" }}>
+              <input
+                type="text" placeholder="Type the location, e.g. Woodgate" value={newLocationName} maxLength={200}
+                autoFocus
+                onChange={e => setNewLocationName(e.target.value)}
+                onKeyDown={e => { if (e.key === "Enter") submitNewLocation() }}
+                style={{ ...inputStyle, flex: 1, minWidth: 200 }}
+              />
+              <button
+                type="button" onClick={submitNewLocation} disabled={!newLocationName.trim() || createLocation.isPending}
+                style={{
+                  padding: "8px 14px", background: newLocationName.trim() ? C.emerald : C.border, border: "none",
+                  borderRadius: "0.625rem", cursor: newLocationName.trim() ? "pointer" : "not-allowed",
+                  ...HEAD, fontSize: 13, fontWeight: 700, color: newLocationName.trim() ? "#04150e" : C.dim,
+                  display: "inline-flex", alignItems: "center", gap: 6,
+                }}
+              >
+                {createLocation.isPending ? <Loader2 size={13} className="animate-spin" /> : <Plus size={13} />}Add
+              </button>
+            </div>
+          )}
         </div>
 
         <div style={{ marginBottom: 14 }}>
