@@ -259,6 +259,24 @@ const statements = [
   )`,
   `CREATE INDEX IF NOT EXISTS activity_logs_property_date_idx
     ON activity_logs(property_id, activity_date DESC) WHERE deleted_at IS NULL`,
+  // Self-healing: keep reference counters at least as high as the largest issued reference,
+  // so a lost/reset counter can never cause duplicate reference numbers.
+  `INSERT INTO reference_counters (property_id, year, kind, value)
+    SELECT property_id, split_part(reference_number, '-', 2)::int, 'observation',
+           max(split_part(reference_number, '-', 3)::int)
+    FROM observations
+    WHERE reference_number ~ '^BLK-[0-9]{4}-[0-9]{5}$'
+    GROUP BY property_id, split_part(reference_number, '-', 2)::int
+    ON CONFLICT (property_id, year, kind)
+    DO UPDATE SET value = GREATEST(reference_counters.value, EXCLUDED.value)`,
+  `INSERT INTO reference_counters (property_id, year, kind, value)
+    SELECT property_id, split_part(reference_number, '-', 2)::int, 'action',
+           max(split_part(reference_number, '-', 3)::int)
+    FROM actions
+    WHERE reference_number ~ '^ACT-[0-9]{4}-[0-9]{5}$'
+    GROUP BY property_id, split_part(reference_number, '-', 2)::int
+    ON CONFLICT (property_id, year, kind)
+    DO UPDATE SET value = GREATEST(reference_counters.value, EXCLUDED.value)`,
 ];
 
 export async function runMigrations(): Promise<void> {
