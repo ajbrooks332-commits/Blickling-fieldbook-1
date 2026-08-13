@@ -12,6 +12,8 @@ export interface ActionInput {
   title: string;
   description?: string;
   observationId?: number;
+  /** @nullable */
+  namedLocationId?: number | null;
   assignedToUserId: number;
   priority: ActionInputPriority;
   status: ActionInputStatus;

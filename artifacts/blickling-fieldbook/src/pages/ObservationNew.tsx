@@ -128,6 +128,8 @@ export default function ObservationNew() {
 
   const [pendingPhotos, setPendingPhotos] = useState<PendingPhoto[]>()
   const [submitting, setSubmitting] = useState(false)
+  // After a manager saves an observation, offer to turn it straight into a task.
+  const [savedObs, setSavedObs] = useState<{ id: number; photoUploadFailed: boolean } | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [locationError, setLocationError] = useState<string | null>(null)
 
@@ -202,7 +204,13 @@ export default function ObservationNew() {
           catch { photoUploadFailed = true }
         }
       }
-      setLocation(`/observations/${created.id}${photoUploadFailed ? "?photoUploadFailed=1" : ""}`)
+      const isManager = me.role === "administrator" || me.role === "manager"
+      if (isManager && status === "submitted") {
+        setSavedObs({ id: created.id, photoUploadFailed })
+        setSubmitting(false)
+      } else {
+        setLocation(`/observations/${created.id}${photoUploadFailed ? "?photoUploadFailed=1" : ""}`)
+      }
     } catch (error) {
       if (error instanceof TypeError) {
         try {
@@ -248,6 +256,47 @@ export default function ObservationNew() {
   const [nextBtnHover, setNextBtnHover] = useState(false)
   const [submitBtnHover, setSubmitBtnHover] = useState(false)
   const [draftBtnHover, setDraftBtnHover] = useState(false)
+
+  if (savedObs) {
+    return (
+      <div style={{ maxWidth: 480, margin: "0 auto", padding: "48px 16px" }}>
+        <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.875rem", padding: 28, textAlign: "center" }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: "50%", background: "rgba(16,185,129,0.12)",
+            display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px",
+          }}>
+            <Check size={26} color={C.emerald} />
+          </div>
+          <h2 style={{ ...HEAD, fontSize: 19, fontWeight: 700, color: C.text, margin: "0 0 6px" }}>Observation saved</h2>
+          <p style={{ ...BODY, fontSize: 14, color: C.muted, margin: "0 0 22px" }}>
+            Does this need work doing? You can turn it into a task now — the task will be linked to this observation.
+          </p>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            <button
+              type="button"
+              onClick={() => setLocation(`/actions/new?observationId=${savedObs.id}`)}
+              style={{
+                width: "100%", padding: "12px", background: C.emerald, border: "none", borderRadius: "0.625rem",
+                cursor: "pointer", ...HEAD, fontSize: 15, fontWeight: 700, color: "#04150e",
+              }}
+            >
+              Yes — create a task
+            </button>
+            <button
+              type="button"
+              onClick={() => setLocation(`/observations/${savedObs.id}${savedObs.photoUploadFailed ? "?photoUploadFailed=1" : ""}`)}
+              style={{
+                width: "100%", padding: "12px", background: "transparent", border: `1px solid ${C.border}`,
+                borderRadius: "0.625rem", cursor: "pointer", ...HEAD, fontSize: 14, fontWeight: 600, color: C.muted,
+              }}
+            >
+              Not now — view the observation
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div style={{ maxWidth: 560, margin: "0 auto", padding: "0 0 40px" }}>

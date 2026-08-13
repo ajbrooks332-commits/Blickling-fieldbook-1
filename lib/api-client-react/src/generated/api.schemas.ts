@@ -432,6 +432,8 @@ export interface Action {
   /** @nullable */
   completionNote?: string | null;
   /** @nullable */
+  namedLocationId?: number | null;
+  /** @nullable */
   namedLocationName?: string | null;
   /** @nullable */
   estimatedMinutes?: number | null;
@@ -662,6 +664,8 @@ export interface ActionDetail {
   /** @nullable */
   completionNote?: string | null;
   /** @nullable */
+  namedLocationId?: number | null;
+  /** @nullable */
   namedLocationName?: string | null;
   /** @nullable */
   estimatedMinutes?: number | null;
@@ -715,6 +719,8 @@ export interface ActionInput {
   title: string;
   description?: string;
   observationId?: number;
+  /** @nullable */
+  namedLocationId?: number | null;
   assignedToUserId: number;
   priority: ActionInputPriority;
   status: ActionInputStatus;
@@ -743,6 +749,8 @@ export interface ActionUpdate {
   description?: string | null;
   /** @nullable */
   observationId?: number | null;
+  /** @nullable */
+  namedLocationId?: number | null;
   assignedToUserId?: number;
   priority?: ActionUpdatePriority;
   /** @nullable */

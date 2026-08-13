@@ -1,7 +1,8 @@
 import React, { useState } from "react"
-import { useCreateAction, useGetMe, useGetObservation, useListAssignees } from "@workspace/api-client-react"
+import { useQueryClient } from "@tanstack/react-query"
+import { useCreateAction, useCreateLocation, useGetMe, useGetObservation, useListAssignees, useListLocations, getListLocationsQueryKey } from "@workspace/api-client-react"
 import { useLocation, useSearch } from "wouter"
-import { Save, Clock, Users, ArrowLeft, Check } from "lucide-react"
+import { Save, Clock, MapPin, ArrowLeft, Check, Plus } from "lucide-react"
 import { queueAction } from "@/lib/offline"
 
 const C = {
@@ -92,6 +93,8 @@ export default function ActionNew() {
   const createAction = useCreateAction()
   const { data: me } = useGetMe()
   const { data: assignees = [] } = useListAssignees()
+  const { data: locations = [] } = useListLocations()
+  const queryClient = useQueryClient()
 
   const [formData, setFormData] = useState({
     title: "",
@@ -102,10 +105,29 @@ export default function ActionNew() {
     estimatedMinutes: "",
     equipmentRequired: false,
     contractorRequired: false,
-    assignedToUserId: ""
+    assignedToUserId: "",
+    namedLocationId: ""
   })
   const [error, setError] = useState<string | null>(null)
   const [queueing, setQueueing] = useState(false)
+  const [addingLocation, setAddingLocation] = useState(false)
+  const [newLocationName, setNewLocationName] = useState("")
+
+  const createLocation = useCreateLocation({ mutation: {
+    onSuccess: (row) => {
+      queryClient.invalidateQueries({ queryKey: getListLocationsQueryKey() })
+      setFormData(d => ({ ...d, namedLocationId: String(row.id) }))
+      setAddingLocation(false)
+      setNewLocationName("")
+    },
+    onError: () => setError("Could not add that location — please try again."),
+  } })
+
+  const submitNewLocation = () => {
+    const name = newLocationName.trim()
+    if (!name) return
+    createLocation.mutate({ data: { name } })
+  }
 
   const [submitHover, setSubmitHover] = useState(false)
   const [cancelHover, setCancelHover] = useState(false)
@@ -121,6 +143,7 @@ export default function ActionNew() {
       assignedToUserId: Number(formData.assignedToUserId), dueDate: formData.dueDate || undefined,
       estimatedMinutes: formData.estimatedMinutes ? Number(formData.estimatedMinutes) : undefined,
       equipmentRequired: formData.equipmentRequired, contractorRequired: formData.contractorRequired,
+      namedLocationId: formData.namedLocationId ? Number(formData.namedLocationId) : undefined,
       observationId, offlineId,
     }
     if (!navigator.onLine) {
@@ -300,6 +323,48 @@ export default function ActionNew() {
                   )
                 })}
               </div>
+            </div>
+
+            {/* Location */}
+            <div>
+              <label htmlFor="action-location" style={labelStyle}>
+                <span style={{ display: "flex", alignItems: "center", gap: 5 }}><MapPin size={13} color={C.dim} /> Location</span>
+              </label>
+              <select
+                id="action-location"
+                style={inputStyle}
+                value={addingLocation ? "__new__" : formData.namedLocationId}
+                onChange={e => {
+                  if (e.target.value === "__new__") { setAddingLocation(true); setNewLocationName("") }
+                  else { setAddingLocation(false); setFormData(d => ({ ...d, namedLocationId: e.target.value })) }
+                }}
+              >
+                <option value="">No specific location</option>
+                {locations.filter(l => l.active).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                <option value="__new__">Somewhere else… (add new)</option>
+              </select>
+              {addingLocation && (
+                <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
+                  <input
+                    type="text" placeholder="Type the location, e.g. Woodgate" value={newLocationName} maxLength={200}
+                    autoFocus
+                    onChange={e => setNewLocationName(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter") { e.preventDefault(); submitNewLocation() } }}
+                    style={{ ...inputStyle, flex: 1 }}
+                  />
+                  <button
+                    type="button" onClick={submitNewLocation} disabled={!newLocationName.trim() || createLocation.isPending}
+                    style={{
+                      padding: "8px 16px", background: newLocationName.trim() ? C.emerald : C.border, border: "none",
+                      borderRadius: "0.625rem", cursor: newLocationName.trim() ? "pointer" : "not-allowed",
+                      ...HEAD, fontSize: 13, fontWeight: 700, color: newLocationName.trim() ? "#04150e" : C.dim,
+                      display: "inline-flex", alignItems: "center", gap: 6, flexShrink: 0,
+                    }}
+                  >
+                    <Plus size={13} />{createLocation.isPending ? "Adding…" : "Add"}
+                  </button>
+                </div>
+              )}
             </div>
 
             <div>

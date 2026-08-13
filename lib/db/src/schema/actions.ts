@@ -5,6 +5,7 @@ import { propertiesTable } from "./properties";
 import { usersTable } from "./users";
 import { observationsTable } from "./observations";
 import { observationPriorityEnum } from "./observations";
+import { namedLocationsTable } from "./named-locations";
 
 export const actionStatusEnum = pgEnum("action_status", [
   "not_started", "planned", "in_progress", "waiting", "completed", "cancelled"
@@ -17,6 +18,7 @@ export const actionsTable = pgTable("actions", {
   referenceNumber: text("reference_number").notNull().unique(),
   title: text("title").notNull(),
   description: text("description"),
+  namedLocationId: integer("named_location_id").references(() => namedLocationsTable.id),
   assignedToUserId: integer("assigned_to_user_id").notNull().references(() => usersTable.id),
   createdByUserId: integer("created_by_user_id").references(() => usersTable.id),
   priority: observationPriorityEnum("priority").notNull().default("normal"),

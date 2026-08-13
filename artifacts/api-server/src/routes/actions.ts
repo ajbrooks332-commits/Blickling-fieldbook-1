@@ -15,6 +15,7 @@ const status = z.enum(actionStatuses);
 const dueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD due date");
 const createSchema = z.object({
   title: shortText, description: optionalText(10000), observationId: z.number().int().positive().optional().nullable(),
+  namedLocationId: z.number().int().positive().optional().nullable(),
   assignedToUserId: z.number().int().positive(), priority, status: z.enum(["not_started", "planned"]).default("not_started"),
   dueDate: dueDate.optional().nullable(), estimatedMinutes: z.number().int().min(0).max(525600).optional().nullable(),
   equipmentRequired: z.boolean().default(false), contractorRequired: z.boolean().default(false),
@@ -29,7 +30,8 @@ const actionFields = {
   observationRef: observationsTable.referenceNumber, assignedToUserId: actionsTable.assignedToUserId,
   assignedToName: usersTable.name, createdByUserId: actionsTable.createdByUserId, priority: actionsTable.priority,
   status: actionsTable.status, dueDate: actionsTable.dueDate, completedAt: actionsTable.completedAt,
-  completionNote: actionsTable.completionNote, namedLocationName: namedLocationsTable.name,
+  completionNote: actionsTable.completionNote, namedLocationId: actionsTable.namedLocationId,
+  namedLocationName: namedLocationsTable.name,
   estimatedMinutes: actionsTable.estimatedMinutes, equipmentRequired: actionsTable.equipmentRequired,
   contractorRequired: actionsTable.contractorRequired, waitingReason: actionsTable.waitingReason,
   cancellationReason: actionsTable.cancellationReason, propertyId: actionsTable.propertyId,
@@ -52,11 +54,20 @@ async function validateObservation(propertyId: number, observationId?: number | 
   return Boolean(row);
 }
 
+async function validateLocation(propertyId: number, namedLocationId?: number | null) {
+  if (!namedLocationId) return true;
+  const [row] = await db.select({ id: namedLocationsTable.id }).from(namedLocationsTable)
+    .where(and(eq(namedLocationsTable.id, namedLocationId), eq(namedLocationsTable.propertyId, propertyId))).limit(1);
+  return Boolean(row);
+}
+
 function baseSelect() {
   return db.select(actionFields).from(actionsTable)
     .leftJoin(observationsTable, eq(actionsTable.observationId, observationsTable.id))
     .leftJoin(usersTable, eq(actionsTable.assignedToUserId, usersTable.id))
-    .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id));
+    // An action's own location wins; otherwise fall back to the linked observation's location.
+    .leftJoin(namedLocationsTable, eq(namedLocationsTable.id,
+      sql`COALESCE(${actionsTable.namedLocationId}, ${observationsTable.namedLocationId})`));
 }
 
 router.get("/my", requireAuth, async (req, res) => {
@@ -118,11 +129,15 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
   if (!(await validateObservation(user.propertyId!, parsed.data.observationId))) {
     return void res.status(400).json({ error: "Observation not found for this estate" });
   }
+  if (!(await validateLocation(user.propertyId!, parsed.data.namedLocationId))) {
+    return void res.status(400).json({ error: "Location not found for this estate" });
+  }
   const referenceNumber = await generateActionRef(user.propertyId!);
   const action = await db.transaction(async (tx) => {
     const [created] = await tx.insert(actionsTable).values({
       propertyId: user.propertyId!, referenceNumber, title: parsed.data.title,
       description: parsed.data.description ?? null, observationId: parsed.data.observationId ?? null,
+      namedLocationId: parsed.data.namedLocationId ?? null,
       assignedToUserId: parsed.data.assignedToUserId, createdByUserId: user.id, priority: parsed.data.priority,
       status: parsed.data.status, dueDate: toDueDate(parsed.data.dueDate), estimatedMinutes: parsed.data.estimatedMinutes ?? null,
       equipmentRequired: parsed.data.equipmentRequired, contractorRequired: parsed.data.contractorRequired,
@@ -196,6 +211,9 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
   }
   if (parsed.data.observationId !== undefined && !(await validateObservation(user.propertyId!, parsed.data.observationId))) {
     return void res.status(400).json({ error: "Observation not found for this estate" });
+  }
+  if (parsed.data.namedLocationId !== undefined && !(await validateLocation(user.propertyId!, parsed.data.namedLocationId))) {
+    return void res.status(400).json({ error: "Location not found for this estate" });
   }
   const updates: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
   if (parsed.data.dueDate !== undefined) updates.dueDate = toDueDate(parsed.data.dueDate);

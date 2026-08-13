@@ -36,6 +36,8 @@ export interface ActionDetail {
   /** @nullable */
   completionNote?: string | null;
   /** @nullable */
+  namedLocationId?: number | null;
+  /** @nullable */
   namedLocationName?: string | null;
   /** @nullable */
   estimatedMinutes?: number | null;

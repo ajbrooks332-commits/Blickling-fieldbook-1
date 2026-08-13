@@ -1790,6 +1790,8 @@ components:
           type: ["string", "null"]
         completionNote:
           type: ["string", "null"]
+        namedLocationId:
+          type: ["integer", "null"]
         namedLocationName:
           type: ["string", "null"]
         estimatedMinutes:
@@ -1841,6 +1843,8 @@ components:
           type: ["string", "null"]
         completionNote:
           type: ["string", "null"]
+        namedLocationId:
+          type: ["integer", "null"]
         namedLocationName:
           type: ["string", "null"]
         estimatedMinutes:
@@ -1918,6 +1922,8 @@ components:
           type: string
         observationId:
           type: integer
+        namedLocationId:
+          type: ["integer", "null"]
         assignedToUserId:
           type: integer
         priority:
@@ -1950,6 +1956,8 @@ components:
         description:
           type: ["string", "null"]
         observationId:
+          type: ["integer", "null"]
+        namedLocationId:
           type: ["integer", "null"]
         assignedToUserId:
           type: integer

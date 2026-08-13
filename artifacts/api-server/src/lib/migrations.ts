@@ -308,6 +308,7 @@ const statements = [
     SELECT id, named_location_id FROM activity_logs
     WHERE named_location_id IS NOT NULL
     ON CONFLICT DO NOTHING`,
+  `ALTER TABLE actions ADD COLUMN IF NOT EXISTS named_location_id integer REFERENCES named_locations(id)`,
   // Reconcile case-variant duplicate named locations, then enforce case-insensitive
   // uniqueness so quick-add from the activity tracker is race-safe.
   `UPDATE observations SET named_location_id = canon.id
@@ -322,6 +323,12 @@ const statements = [
           FROM named_locations GROUP BY property_id, lower(name)) canon
       ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
     WHERE activity_logs.named_location_id = dupe.id AND dupe.id <> canon.id`,
+  `UPDATE actions SET named_location_id = canon.id
+    FROM named_locations dupe
+    JOIN (SELECT property_id, lower(name) AS lname, min(id) AS id
+          FROM named_locations GROUP BY property_id, lower(name)) canon
+      ON canon.property_id = dupe.property_id AND canon.lname = lower(dupe.name)
+    WHERE actions.named_location_id = dupe.id AND dupe.id <> canon.id`,
   `INSERT INTO activity_log_locations (activity_log_id, named_location_id)
     SELECT j.activity_log_id, canon.id
     FROM activity_log_locations j

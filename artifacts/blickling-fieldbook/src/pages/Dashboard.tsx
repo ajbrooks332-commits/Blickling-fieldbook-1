@@ -3,7 +3,7 @@ import { useGetDashboardSummary, useGetDashboardCharts } from "@workspace/api-cl
 import { Link, useLocation } from "wouter"
 import {
   AlertTriangle, ArrowUp, Clock, Activity, ChevronRight,
-  TrendingUp, MapPin
+  TrendingUp, MapPin, ClipboardList
 } from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -228,7 +228,7 @@ export default function Dashboard() {
       )}
 
       {/* ── Secondary stats callouts ─────────────────────────────────────── */}
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
         <button
           onClick={() => setLocation("/actions/my")}
           className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl w-full text-left transition-all"
@@ -254,6 +254,20 @@ export default function Dashboard() {
           <div className="flex-1">
             <div className="text-sm font-bold" style={{ ...HEAD, color: C.blue }}>{summary.observationsLast30Days}</div>
             <div className="text-[11px]" style={{ ...BODY, color: C.muted }}>New last 30d</div>
+          </div>
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: C.dim }} />
+        </button>
+        <button
+          onClick={() => setLocation("/activities")}
+          className="flex items-center gap-2.5 px-3 py-2.5 rounded-xl w-full text-left transition-all"
+          style={{ background: "rgba(167,139,250,0.08)", border: `1px solid rgba(167,139,250,0.2)`, cursor: "pointer" }}
+          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.14)" }}
+          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "rgba(167,139,250,0.08)" }}
+        >
+          <ClipboardList className="h-4 w-4 shrink-0" style={{ color: "#a78bfa" }} />
+          <div className="flex-1">
+            <div className="text-sm font-bold" style={{ ...HEAD, color: "#a78bfa" }}>Activities</div>
+            <div className="text-[11px]" style={{ ...BODY, color: C.muted }}>Log & report</div>
           </div>
           <ChevronRight className="h-3.5 w-3.5 shrink-0" style={{ color: C.dim }} />
         </button>

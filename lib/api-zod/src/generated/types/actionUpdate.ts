@@ -13,6 +13,8 @@ export interface ActionUpdate {
   description?: string | null;
   /** @nullable */
   observationId?: number | null;
+  /** @nullable */
+  namedLocationId?: number | null;
   assignedToUserId?: number;
   priority?: ActionUpdatePriority;
   /** @nullable */
