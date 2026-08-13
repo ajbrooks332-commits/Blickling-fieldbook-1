@@ -931,6 +931,7 @@ safetyIssue?: boolean;
 
 export type ListActionsParams = {
 status?: string;
+bucket?: ListActionsBucket;
 priority?: string;
 assignedUserId?: number;
 observationId?: number;
@@ -939,6 +940,14 @@ search?: string;
 page?: number;
 limit?: number;
 };
+
+export type ListActionsBucket = typeof ListActionsBucket[keyof typeof ListActionsBucket];
+
+
+export const ListActionsBucket = {
+  open: 'open',
+  completed: 'completed',
+} as const;
 
 export type ListActivitiesParams = {
 from?: string;

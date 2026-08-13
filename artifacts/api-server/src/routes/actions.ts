@@ -90,7 +90,8 @@ router.get("/my", requireAuth, async (req, res) => {
 
 router.get("/", requireAuth, async (req, res) => {
   const parsed = z.object({
-    status: status.optional(), priority: priority.optional(), assignedUserId: idSchema.optional(), observationId: idSchema.optional(),
+    status: status.optional(), bucket: z.enum(["open", "completed"]).optional(),
+    priority: priority.optional(), assignedUserId: idSchema.optional(), observationId: idSchema.optional(),
     overdue: z.enum(["true", "false"]).optional(), search: z.string().trim().max(200).optional(),
     page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().min(1).max(100).default(20),
   }).safeParse(req.query);
@@ -98,6 +99,8 @@ router.get("/", requireAuth, async (req, res) => {
   const q = parsed.data;
   const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt)];
   if (q.status) conditions.push(eq(actionsTable.status, q.status));
+  if (q.bucket === "open") conditions.push(sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`);
+  if (q.bucket === "completed") conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
   if (q.priority) conditions.push(eq(actionsTable.priority, q.priority));
   if (q.assignedUserId) conditions.push(eq(actionsTable.assignedToUserId, q.assignedUserId));
   if (q.observationId) conditions.push(eq(actionsTable.observationId, q.observationId));

@@ -1,6 +1,6 @@
 import React from "react"
 import { useListActions } from "@workspace/api-client-react"
-import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X } from "lucide-react"
+import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X, ChevronDown, ChevronRight, User } from "lucide-react"
 import { Link, useSearch } from "wouter"
 import { formatShortDate } from "@/lib/utils"
 
@@ -48,19 +48,13 @@ function priorityBorderColor(p: string) {
 
 function statusColor(s: string) {
   switch (s) {
-    case "action_required": return "#f85149"
-    case "submitted":       return "#58a6ff"
-    case "under_review":    return "#a78bfa"
-    case "monitoring":      return "#34d399"
-    case "resolved":        return "#10b981"
-    case "closed":          return "#484f58"
-    case "cancelled":       return "#484f58"
-    case "not_started":     return "#8b949e"
-    case "planned":         return "#58a6ff"
-    case "in_progress":     return "#d29922"
-    case "waiting":         return "#a78bfa"
-    case "completed":       return "#10b981"
-    default:                return "#8b949e"
+    case "not_started": return "#8b949e"
+    case "planned":     return "#58a6ff"
+    case "in_progress": return "#d29922"
+    case "waiting":     return "#a78bfa"
+    case "completed":   return "#10b981"
+    case "cancelled":   return "#484f58"
+    default:            return "#8b949e"
   }
 }
 function statusBg(s: string) { return statusColor(s) + "1a" }
@@ -82,15 +76,16 @@ export default function ActionList() {
   const initialOverdue = urlParams.get("overdue") === "true"
   const initialPriority = urlParams.get("priority") || ""
 
+  const [tab, setTab] = React.useState<"open" | "completed">("open")
   const [search, setSearch] = React.useState("")
-  const [statusFilter, setStatusFilter] = React.useState("")
   const [overdueOnly, setOverdueOnly] = React.useState(initialOverdue)
   const [priorityFilter, setPriorityFilter] = React.useState(initialPriority)
   const [page, setPage] = React.useState(1)
+  const [expandedId, setExpandedId] = React.useState<number | null>(null)
   const deferredSearch = React.useDeferredValue(search)
 
   const { data: listData, isLoading, error: loadError } = useListActions({
-    ...(statusFilter ? { status: statusFilter } : {}),
+    bucket: tab,
     search: deferredSearch,
     ...(overdueOnly ? { overdue: true } : {}),
     ...(priorityFilter ? { priority: priorityFilter } : {}),
@@ -102,12 +97,40 @@ export default function ActionList() {
     return new Date(dueDate) < new Date()
   }
 
+  const switchTab = (next: "open" | "completed") => {
+    setTab(next); setPage(1); setExpandedId(null)
+  }
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
       <div>
         <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Actions</h1>
         <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Manage tasks and assignments across the estate</p>
+      </div>
+
+      {/* Tabs */}
+      <div role="tablist" aria-label="Action lists" style={{ display: "flex", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: 4 }}>
+        {([["open", "Open"], ["completed", "Completed"]] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            role="tab"
+            aria-selected={tab === key}
+            aria-controls="action-list-panel"
+            onClick={() => switchTab(key)}
+            style={{
+              flex: 1, padding: "9px 0", borderRadius: "0.5rem", border: "none", cursor: "pointer",
+              background: tab === key ? C.emeraldTint : "transparent",
+              color: tab === key ? C.emerald : C.muted,
+              ...HEAD, fontSize: 13, fontWeight: 700,
+              boxShadow: tab === key ? `inset 0 0 0 1px rgba(16,185,129,0.35)` : "none",
+              transition: "all 0.15s",
+            }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
       {/* Active filter chips */}
@@ -135,57 +158,31 @@ export default function ActionList() {
         </div>
       )}
 
-      {/* Search + filter bar */}
-      <div className="flex gap-2">
-        <div className="relative flex-1">
-          <Search style={{ color: C.dim }} className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
-          <input
-            placeholder="Search action ref, title, assignee..."
-            value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1) }}
-            style={{
-              ...BODY,
-              width: "100%",
-              background: C.bg,
-              border: `1px solid ${C.border}`,
-              color: C.text,
-              borderRadius: "0.625rem",
-              padding: "8px 12px 8px 36px",
-              fontSize: 14,
-              outline: "none",
-            }}
-            onFocus={e => (e.target.style.borderColor = C.emerald)}
-            onBlur={e => (e.target.style.borderColor = C.border)}
-          />
-        </div>
-        <select
-          value={statusFilter}
-          onChange={e => { setStatusFilter(e.target.value); setPage(1) }}
+      {/* Search bar */}
+      <div className="relative">
+        <Search style={{ color: C.dim }} className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4" />
+        <input
+          placeholder="Search action ref, title, assignee..."
+          value={search}
+          onChange={(e) => { setSearch(e.target.value); setPage(1) }}
           style={{
             ...BODY,
+            width: "100%",
             background: C.bg,
             border: `1px solid ${C.border}`,
-            color: statusFilter ? C.text : C.dim,
+            color: C.text,
             borderRadius: "0.625rem",
-            padding: "8px 12px",
-            fontSize: 13,
-            cursor: "pointer",
+            padding: "8px 12px 8px 36px",
+            fontSize: 14,
             outline: "none",
           }}
           onFocus={e => (e.target.style.borderColor = C.emerald)}
           onBlur={e => (e.target.style.borderColor = C.border)}
-        >
-          <option value="">All Statuses</option>
-          <option value="not_started">Not Started</option>
-          <option value="planned">Planned</option>
-          <option value="in_progress">In Progress</option>
-          <option value="waiting">Waiting</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
-        </select>
+        />
       </div>
 
-      {/* Loading */}
+      {/* Loading / error / empty */}
+      <div id="action-list-panel" role="tabpanel" aria-label={tab === "open" ? "Open actions" : "Completed actions"} className="space-y-5">
       {loadError ? <div role="alert" className="rounded-md border border-destructive/30 p-4">Actions could not be loaded.</div> : isLoading ? (
         <div className="flex justify-center items-center gap-1 p-12">
           {[0, 150, 300].map(delay => (
@@ -197,121 +194,117 @@ export default function ActionList() {
           ))}
         </div>
       ) : listData?.actions.length === 0 ? (
-        /* Empty state */
         <div
           className="flex flex-col items-center justify-center p-12"
           style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem" }}
         >
           <FileText className="w-10 h-10 mb-3" style={{ color: C.dim }} />
-          <p style={{ ...BODY, color: C.muted, fontSize: 14, fontWeight: 500 }}>No actions found</p>
+          <p style={{ ...BODY, color: C.muted, fontSize: 14, fontWeight: 500 }}>
+            {tab === "open" ? "No open actions" : "No completed actions"}
+          </p>
           <p style={{ ...BODY, color: C.dim, fontSize: 12, marginTop: 4 }}>Try adjusting your search or filters</p>
         </div>
       ) : (
-        <div className="grid gap-3">
+        <div className="grid gap-2">
           {listData?.actions.map(act => {
             const pc = priorityConfig(act.priority)
             const overdue = isOverdue(act.dueDate, act.status)
+            const expanded = expandedId === act.id
             return (
-              <Link key={act.id} href={`/actions/${act.id}`}>
-                <div
-                  className="cursor-pointer transition-all"
-                  style={{
-                    background: overdue ? `rgba(248,81,73,0.04)` : C.surface,
-                    border: `1px solid ${C.border}`,
-                    borderLeft: `3px solid ${priorityBorderColor(act.priority)}`,
-                    borderRadius: "0.75rem",
-                    padding: "16px",
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.borderColor = `${priorityBorderColor(act.priority)}`)}
-                  onMouseLeave={e => (e.currentTarget.style.borderColor = C.border)}
+              <div
+                key={act.id}
+                style={{
+                  background: overdue ? `rgba(248,81,73,0.04)` : C.surface,
+                  border: `1px solid ${expanded ? priorityBorderColor(act.priority) + "60" : C.border}`,
+                  borderLeft: `3px solid ${priorityBorderColor(act.priority)}`,
+                  borderRadius: "0.75rem",
+                  overflow: "hidden",
+                  transition: "border-color 0.15s",
+                }}
+              >
+                {/* Compact row: title + status */}
+                <button
+                  type="button"
+                  onClick={() => setExpandedId(expanded ? null : act.id)}
+                  aria-expanded={expanded}
+                  className="w-full text-left"
+                  style={{ display: "flex", alignItems: "center", gap: 10, padding: "13px 14px", background: "transparent", border: "none", cursor: "pointer" }}
                 >
-                  {/* Top row: ref, priority, status */}
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <span
-                      style={{
-                        ...HEAD,
-                        fontSize: 11,
-                        color: C.muted,
-                        background: C.borderMid,
-                        borderRadius: "0.375rem",
-                        padding: "2px 8px",
-                        fontWeight: 600,
-                        letterSpacing: "0.05em",
-                      }}
-                    >
-                      {act.referenceNumber}
-                    </span>
-                    {/* Priority pill */}
-                    <span
-                      className="flex items-center gap-1"
-                      style={{
-                        ...HEAD,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: pc.color,
-                        background: pc.bg,
-                        borderRadius: "9999px",
-                        padding: "2px 8px",
-                      }}
-                    >
-                      <PriorityIcon p={act.priority} />
-                      {pc.label}
-                    </span>
-                    {/* Status pill */}
-                    <span
-                      style={{
-                        ...HEAD,
-                        fontSize: 11,
-                        fontWeight: 600,
-                        color: statusColor(act.status),
-                        background: statusBg(act.status),
-                        borderRadius: "9999px",
-                        padding: "2px 8px",
-                        marginLeft: "auto",
-                      }}
-                    >
-                      {statusLabel(act.status)}
-                    </span>
-                  </div>
-
-                  {/* Title */}
-                  <h3 style={{ ...BODY, color: C.text, fontSize: 15, fontWeight: 500, marginBottom: 8 }}>
+                  {expanded
+                    ? <ChevronDown className="w-4 h-4 shrink-0" style={{ color: C.dim }} />
+                    : <ChevronRight className="w-4 h-4 shrink-0" style={{ color: C.dim }} />}
+                  <span className="flex-1 min-w-0 truncate" style={{ ...BODY, color: C.text, fontSize: 14.5, fontWeight: 500 }}>
                     {act.title}
-                  </h3>
+                  </span>
+                  {overdue && (
+                    <span style={{ ...HEAD, fontSize: 10, fontWeight: 700, color: C.urgent }}>OVERDUE</span>
+                  )}
+                  <span
+                    className="shrink-0"
+                    style={{
+                      ...HEAD, fontSize: 11, fontWeight: 600,
+                      color: statusColor(act.status), background: statusBg(act.status),
+                      borderRadius: "9999px", padding: "3px 9px",
+                    }}
+                  >
+                    {statusLabel(act.status)}
+                  </span>
+                </button>
 
-                  {/* Meta row */}
-                  <div className="flex flex-wrap items-center gap-3">
-                    {act.assignedToName ? (
-                      <span style={{ ...BODY, fontSize: 12, color: C.muted, background: C.borderMid, borderRadius: "0.375rem", padding: "2px 8px" }}>
-                        {act.assignedToName}
+                {/* Expanded details */}
+                {expanded && (
+                  <div style={{ borderTop: `1px solid ${C.borderMid}`, padding: "12px 14px 14px 38px" }}>
+                    <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                      <span style={{ ...HEAD, fontSize: 11, color: C.muted, background: C.borderMid, borderRadius: "0.375rem", padding: "2px 8px", fontWeight: 600, letterSpacing: "0.05em" }}>
+                        {act.referenceNumber}
                       </span>
-                    ) : (
-                      <span style={{ ...BODY, fontSize: 12, color: C.high, background: C.highTint, borderRadius: "0.375rem", padding: "2px 8px" }}>
-                        Unassigned
+                      <span className="flex items-center gap-1" style={{ ...HEAD, fontSize: 11, fontWeight: 600, color: pc.color, background: pc.bg, borderRadius: "9999px", padding: "2px 8px" }}>
+                        <PriorityIcon p={act.priority} /> {pc.label}
                       </span>
+                    </div>
+
+                    {act.description && (
+                      <p style={{ ...BODY, fontSize: 13, color: C.muted, margin: "0 0 10px", whiteSpace: "pre-wrap" }}>
+                        {act.description}
+                      </p>
                     )}
 
-                    {act.dueDate && (
-                      <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 12, color: overdue ? C.urgent : C.muted }}>
-                        <Clock className="w-3 h-3" /> Due {formatShortDate(act.dueDate)}
-                        {overdue && <span style={{ fontSize: 10, fontWeight: 700, color: C.urgent }}> · OVERDUE</span>}
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 12, color: act.assignedToName ? C.muted : C.high }}>
+                        <User className="w-3 h-3" /> {act.assignedToName || "Unassigned"}
                       </span>
-                    )}
+                      {act.dueDate && (
+                        <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 12, color: overdue ? C.urgent : C.muted }}>
+                          <Clock className="w-3 h-3" /> Due {formatShortDate(act.dueDate)}
+                        </span>
+                      )}
+                      {act.namedLocationName && (
+                        <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 12, color: C.muted }}>
+                          <MapPin className="w-3 h-3" /> {act.namedLocationName}
+                        </span>
+                      )}
+                      {act.observationRef && (
+                        <Link href={`/observations/${act.observationId}`} onClick={e => e.stopPropagation()}>
+                          <span style={{ ...BODY, fontSize: 12, color: C.emerald, cursor: "pointer" }}>↗ {act.observationRef}</span>
+                        </Link>
+                      )}
+                    </div>
 
-                    {act.namedLocationName && (
-                      <span className="flex items-center gap-1" style={{ ...BODY, fontSize: 12, color: C.muted }}>
-                        <MapPin className="w-3 h-3" /> {act.namedLocationName}
-                      </span>
-                    )}
-
-                    {act.observationRef && (
-                      <span style={{ ...BODY, fontSize: 12, color: C.emerald }}>
-                        ↗ {act.observationRef}
-                      </span>
-                    )}
+                    <div style={{ marginTop: 12 }}>
+                      <Link href={`/actions/${act.id}`}>
+                        <span
+                          style={{
+                            display: "inline-block", ...HEAD, fontSize: 12, fontWeight: 700, color: C.emerald,
+                            border: `1px solid rgba(16,185,129,0.35)`, borderRadius: "0.5rem", padding: "6px 14px", cursor: "pointer",
+                          }}
+                        >
+                          Open full details
+                        </span>
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              </Link>
+                )}
+              </div>
             )
           })}
         </div>
@@ -321,6 +314,7 @@ export default function ActionList() {
         <span className="text-sm text-muted-foreground">Page {page} of {Math.ceil(listData.total / listData.limit)} · {listData.total} records</span>
         <button type="button" disabled={page >= Math.ceil(listData.total / listData.limit) || isLoading} onClick={() => setPage((value) => value + 1)} className="rounded-md border px-3 py-2 disabled:opacity-50">Next</button>
       </nav>}
+      </div>
     </div>
   )
 }

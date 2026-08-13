@@ -38,7 +38,7 @@ const C = {
 const bottomNavItems = [
   { label: "Home",    href: "/",           icon: LayoutDashboard },
   { label: "Map",     href: "/map",         icon: MapIcon },
-  { label: "record",  href: "/observations/new", icon: Plus, special: true },
+  { label: "record",  href: "__create__", icon: Plus, special: true },
   { label: "Actions", href: "/actions",     icon: CheckSquare },
   { label: "More",    href: "__more__",     icon: ({ className }: { className?: string }) => (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -67,6 +67,39 @@ const sidebarAdmin = [
 export default function AppShell({ children, user }: { children: React.ReactNode; user: AuthUser }) {
   const [location, setLocation] = useLocation()
   const [drawerOpen, setDrawerOpen] = React.useState(false)
+  const [createOpen, setCreateOpen] = React.useState(false)
+  const canCreateAction = user.role === "administrator" || user.role === "manager"
+  const createDialogRef = React.useRef<HTMLDivElement>(null)
+  const createInvokerRef = React.useRef<HTMLElement | null>(null)
+
+  const openCreate = (event: React.MouseEvent<HTMLElement>) => {
+    createInvokerRef.current = event.currentTarget
+    setCreateOpen(true)
+  }
+  const closeCreate = React.useCallback(() => {
+    setCreateOpen(false)
+    createInvokerRef.current?.focus()
+  }, [])
+
+  // Focus management for the create chooser: move focus in on open, trap Tab, restore on close.
+  React.useEffect(() => {
+    if (!createOpen) return
+    const dialog = createDialogRef.current
+    if (!dialog) return
+    const focusables = () => Array.from(dialog.querySelectorAll<HTMLElement>("button, [href], [tabindex]:not([tabindex='-1'])"))
+    focusables()[0]?.focus()
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Tab") return
+      const items = focusables()
+      if (items.length === 0) return
+      const first = items[0], last = items[items.length - 1]
+      const active = document.activeElement as HTMLElement | null
+      if (event.shiftKey && (active === first || !dialog.contains(active))) { event.preventDefault(); last.focus() }
+      else if (!event.shiftKey && (active === last || !dialog.contains(active))) { event.preventDefault(); first.focus() }
+    }
+    document.addEventListener("keydown", onKeyDown)
+    return () => document.removeEventListener("keydown", onKeyDown)
+  }, [createOpen])
   const [online, setOnline] = React.useState(navigator.onLine)
   const [pending, setPending] = React.useState(0)
   const [outboxError, setOutboxError] = React.useState<string | null>(null)
@@ -96,11 +129,11 @@ export default function AppShell({ children, user }: { children: React.ReactNode
   }
 
   React.useEffect(() => {
-    if (!drawerOpen) return
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setDrawerOpen(false) }
+    if (!drawerOpen && !createOpen) return
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") { setDrawerOpen(false); if (createOpen) closeCreate() } }
     window.addEventListener("keydown", close)
     return () => window.removeEventListener("keydown", close)
-  }, [drawerOpen])
+  }, [drawerOpen, createOpen, closeCreate])
 
   React.useEffect(() => {
     const refresh = () => {
@@ -184,10 +217,10 @@ export default function AppShell({ children, user }: { children: React.ReactNode
              managementItems.find(i => isActive(i.href))?.label ||
              "Blickling Fieldbook"}
           </div>
-          <Link href="/observations/new" className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
+          <button type="button" onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
             style={{ background: C.emerald, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>
-            <Plus className="h-4 w-4" /> New Observation
-          </Link>
+            <Plus className="h-4 w-4" /> New
+          </button>
         </header>
 
         {/* Page content */}
@@ -210,11 +243,11 @@ export default function AppShell({ children, user }: { children: React.ReactNode
           {bottomNavItems.map(({ label, href, icon: Icon, special }) => {
             if (special) {
               return (
-                <Link key={label} href={href} aria-label="Record a new observation" className="flex flex-col items-center justify-center -translate-y-4">
+                <button key={label} type="button" onClick={openCreate} aria-label="Record something new" aria-expanded={createOpen} className="flex flex-col items-center justify-center -translate-y-4">
                   <span className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg" style={{ background: C.emerald }}>
                     <Icon className="h-5 w-5" style={{ color: "#fff" }} />
                   </span>
-                </Link>
+                </button>
               )
             }
             const active = href === "__more__" ? drawerOpen : isActive(href)
@@ -249,6 +282,37 @@ export default function AppShell({ children, user }: { children: React.ReactNode
           })}
         </div>
       </nav>
+
+      {/* ── Create chooser ────────────────────────────────────────────────── */}
+      {createOpen && (
+        <div className="fixed inset-0 z-50 flex flex-col justify-end lg:justify-center lg:items-center">
+          <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={closeCreate} />
+          <div ref={createDialogRef} role="dialog" aria-modal="true" aria-label="What would you like to record?"
+            className="relative rounded-t-2xl lg:rounded-2xl overflow-hidden w-full lg:max-w-sm"
+            style={{ background: C.surface, borderTop: `1px solid ${C.borderMid}` }}
+          >
+            <div className="flex justify-center pt-3 pb-1 lg:hidden">
+              <div className="w-10 h-1 rounded-full" style={{ background: C.borderMid }} />
+            </div>
+            <div className="flex items-center justify-between px-5 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <div className="text-sm font-semibold" style={{ fontFamily: "'Space Grotesk', sans-serif", color: C.text }}>
+                What would you like to record?
+              </div>
+              <button onClick={closeCreate} aria-label="Close" className="p-1.5 rounded-lg" style={{ background: C.border }}>
+                <X className="h-4 w-4" style={{ color: C.textMuted }} />
+              </button>
+            </div>
+            <div className="px-4 py-4 space-y-1">
+              <DrawerItem icon={ListTodo} label="Observation" onClick={() => { setLocation("/observations/new"); setCreateOpen(false) }} />
+              {canCreateAction && (
+                <DrawerItem icon={CheckSquare} label="Action" onClick={() => { setLocation("/actions/new"); setCreateOpen(false) }} />
+              )}
+              <DrawerItem icon={ClipboardList} label="Activity" onClick={() => { setLocation("/activities"); setCreateOpen(false) }} />
+            </div>
+            <div className="h-safe-bottom" />
+          </div>
+        </div>
+      )}
 
       {/* ── More drawer (mobile) ──────────────────────────────────────────── */}
       {drawerOpen && (

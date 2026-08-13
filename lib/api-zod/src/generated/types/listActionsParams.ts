@@ -5,9 +5,11 @@
  * Blickling Fieldbook API
  * OpenAPI spec version: 0.1.0
  */
+import type { ListActionsBucket } from './listActionsBucket';
 
 export type ListActionsParams = {
 status?: string;
+bucket?: ListActionsBucket;
 priority?: string;
 assignedUserId?: number;
 observationId?: number;

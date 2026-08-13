@@ -681,6 +681,7 @@ export const UpdateObservationStatusResponse = zod.object({
  */
 export const ListActionsQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
+  "bucket": zod.enum(['open', 'completed']).optional(),
   "priority": zod.coerce.string().optional(),
   "assignedUserId": zod.coerce.number().optional(),
   "observationId": zod.coerce.number().optional(),

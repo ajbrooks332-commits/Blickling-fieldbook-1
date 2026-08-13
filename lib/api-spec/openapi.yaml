@@ -571,6 +571,11 @@ paths:
           in: query
           schema:
             type: string
+        - name: bucket
+          in: query
+          schema:
+            type: string
+            enum: [open, completed]
         - name: priority
           in: query
           schema:

@@ -50,6 +50,7 @@ export * from './getReportSummaryParams';
 export * from './healthStatus';
 export * from './imageInput';
 export * from './imageInputImageType';
+export * from './listActionsBucket';
 export * from './listActionsParams';
 export * from './listActivities200';
 export * from './listActivitiesParams';
