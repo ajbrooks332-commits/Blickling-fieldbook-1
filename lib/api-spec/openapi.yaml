@@ -478,6 +478,35 @@ paths:
                 items:
                   $ref: "#/components/schemas/ObservationMarker"
 
+  /actions/map:
+    get:
+      operationId: getActionMapData
+      tags: [actions]
+      summary: Get lightweight action data for map markers
+      parameters:
+        - name: bucket
+          in: query
+          schema:
+            type: string
+            enum: [open, completed]
+        - name: priority
+          in: query
+          schema:
+            type: string
+        - name: namedLocationId
+          in: query
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Map marker data
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ActionMarker"
+
   /observations/{id}:
     get:
       operationId: getObservation
@@ -1672,6 +1701,31 @@ components:
           type: ["string", "null"]
         safetyIssue:
           type: boolean
+
+    ActionMarker:
+      type: object
+      required: [id, title, priority, status, latitude, longitude]
+      properties:
+        id:
+          type: integer
+        title:
+          type: string
+        referenceNumber:
+          type: string
+        priority:
+          type: string
+        status:
+          type: string
+        latitude:
+          type: number
+        longitude:
+          type: number
+        namedLocationName:
+          type: ["string", "null"]
+        observationId:
+          type: ["integer", "null"]
+        dueDate:
+          type: ["string", "null"]
 
     ObservationInput:
       type: object

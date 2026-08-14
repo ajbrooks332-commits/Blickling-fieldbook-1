@@ -12,6 +12,7 @@ import markerShadow from 'leaflet/dist/images/marker-shadow.png'
 delete (L.Icon.Default.prototype as any)._getIconUrl
 L.Icon.Default.mergeOptions({ iconRetinaUrl: markerIcon2x, iconUrl: markerIcon, shadowUrl: markerShadow })
 
+import { useLocation } from "wouter"
 import { useListCategories, useListLocations } from "@workspace/api-client-react"
 import { Crosshair, X, MapPin, SlidersHorizontal } from "lucide-react"
 import { apiFetch } from "@/lib/api"
@@ -43,6 +44,19 @@ type MapMarker = {
   categoryColour: string | null
   namedLocationName: string | null
   safetyIssue: boolean
+}
+
+type TaskMarker = {
+  id: number
+  title: string
+  referenceNumber: string
+  priority: 'low' | 'normal' | 'high' | 'urgent'
+  status: string
+  latitude: number
+  longitude: number
+  namedLocationName: string | null
+  observationId: number | null
+  dueDate: string | null
 }
 
 type Filters = {
@@ -280,6 +294,21 @@ function FilterPanel({ filters, onChange, onClear, categories, locations, marker
             <span className="capitalize" style={{ ...BODY, fontSize: 12, color: C.muted }}>{p}</span>
           </div>
         ))}
+        <div className="flex items-center gap-2 pt-1">
+          <span
+            className="inline-block w-3 h-3 flex-shrink-0"
+            style={{ backgroundColor: C.dim, border: "1px solid rgba(255,255,255,0.3)", borderRadius: 9999 }}
+          />
+          <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Circle = observation</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <span
+            className="inline-block w-2.5 h-2.5 flex-shrink-0"
+            style={{ backgroundColor: C.dim, border: "1px solid rgba(255,255,255,0.3)", transform: "rotate(45deg)" }}
+          />
+          <span style={{ ...BODY, fontSize: 12, color: C.muted }}>Diamond = open task</span>
+        </div>
+        <p style={{ ...BODY, fontSize: 11, color: C.dim }}>Tap a marker to open its details.</p>
       </div>
     </div>
   )
@@ -292,8 +321,10 @@ export default function MapView() {
   const userMarkerRef = useRef<L.CircleMarker | null>(null)
   const requestRef = useRef<AbortController | null>(null)
 
+  const [, navigate] = useLocation()
   const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
   const [markers, setMarkers] = useState<MapMarker[]>([])
+  const [taskMarkers, setTaskMarkers] = useState<TaskMarker[]>([])
   const [loading, setLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -340,10 +371,20 @@ export default function MapView() {
     setLoading(true); setError(null)
     try {
       const qs = buildQueryString(filters)
-      const res = await apiFetch('/api/observations/map' + (qs ? '?' + qs : ''), { signal: controller.signal })
+      const taskParams = new URLSearchParams()
+      if (filters.priority) taskParams.set('priority', filters.priority)
+      if (filters.namedLocationId) taskParams.set('namedLocationId', filters.namedLocationId)
+      const taskQs = taskParams.toString()
+      const [res, taskRes] = await Promise.all([
+        apiFetch('/api/observations/map' + (qs ? '?' + qs : ''), { signal: controller.signal }),
+        apiFetch('/api/actions/map' + (taskQs ? '?' + taskQs : ''), { signal: controller.signal }),
+      ])
       if (!res.ok) throw new Error((await res.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map observations could not be loaded.')
+      if (!taskRes.ok) throw new Error((await taskRes.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map tasks could not be loaded.')
       const data: MapMarker[] = await res.json()
+      const taskData: TaskMarker[] = await taskRes.json()
       setMarkers(data)
+      setTaskMarkers(taskData)
       setTotalMarkers(Number(res.headers.get("X-Total-Count") ?? data.length))
       setTruncated(res.headers.get("X-Result-Truncated") === "true")
     } catch (err) {
@@ -384,19 +425,24 @@ export default function MapView() {
         opacity: 1,
         fillOpacity: 0.85,
       })
-      const popupHtml = `
-        <div style="min-width:200px;padding:4px;font-family:'Inter',sans-serif">
-          <div style="font-weight:600;margin-bottom:4px;font-size:14px;color:#e6edf3">${escapeHtml(m.title)}</div>
-          <div style="font-size:12px;color:#8b949e;margin-bottom:8px">${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.status.replace('_', ' '))}</div>
-          <div style="margin-bottom:8px">${getPriorityBadgeHtml(m.priority)}${m.safetyIssue ? ' <span style="font-size:13px">⚠️ Safety</span>' : ''}</div>
-          ${m.namedLocationName ? `<div style="font-size:12px;color:#8b949e;margin-bottom:8px">📍 ${escapeHtml(m.namedLocationName)}</div>` : ''}
-          <a href="/observations/${m.id}" style="display:inline-block;padding:4px 12px;background:#10b981;color:white;border-radius:6px;font-size:13px;text-decoration:none;font-family:'Space Grotesk',sans-serif">View observation</a>
-        </div>
-      `
-      circle.bindPopup(L.popup({ maxWidth: 300 }).setContent(popupHtml))
+      circle.bindTooltip(`${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.title)}`, { direction: 'top' })
+      circle.on('click', () => navigate(`/observations/${m.id}`))
       group.addLayer(circle)
     })
-  }, [markers])
+    taskMarkers.forEach((t) => {
+      const color = PRIORITY_COLORS[t.priority] || '#8b949e'
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:14px;height:14px;background:${color};border:2px solid #fff;transform:rotate(45deg);box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+        iconSize: [18, 18],
+        iconAnchor: [9, 9],
+      })
+      const marker = L.marker([t.latitude, t.longitude], { icon, keyboard: true, title: `Task ${t.referenceNumber}: ${t.title}` })
+      marker.bindTooltip(`${escapeHtml(t.referenceNumber)} · ${escapeHtml(t.title)}`, { direction: 'top' })
+      marker.on('click', () => navigate(`/actions/${t.id}`))
+      group.addLayer(marker)
+    })
+  }, [markers, taskMarkers, navigate])
 
   const handleClearFilters = () => setFilters(DEFAULT_FILTERS)
   const active = hasActiveFilters(filters)
@@ -445,7 +491,7 @@ export default function MapView() {
               <MapPin className="h-4 w-4" style={{ color: C.emerald }} />
             )}
             <span style={{ ...HEAD, fontSize: 13, fontWeight: 500, color: C.text }}>
-              {loading ? 'Loading…' : `${markers.length} observation${markers.length !== 1 ? 's' : ''}`}
+              {loading ? 'Loading…' : `${markers.length} observation${markers.length !== 1 ? 's' : ''} · ${taskMarkers.length} task${taskMarkers.length !== 1 ? 's' : ''}`}
             </span>
             {active && !loading && (
               <span

@@ -25,6 +25,7 @@ import type {
   ActionImage,
   ActionInput,
   ActionList,
+  ActionMarker,
   ActionStatusUpdate,
   ActionUpdate,
   ActivityLogInput,
@@ -41,6 +42,7 @@ import type {
   DashboardCharts,
   DashboardSummary,
   ExportReportCsvParams,
+  GetActionMapDataParams,
   GetActivityReportParams,
   GetObservationMapDataParams,
   GetReportSummaryParams,
@@ -1658,6 +1660,90 @@ export function useGetObservationMapData<TData = Awaited<ReturnType<typeof getOb
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetObservationMapDataQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetActionMapDataUrl = (params?: GetActionMapDataParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : String(value))
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/actions/map?${stringifiedParams}` : `/api/actions/map`
+}
+
+/**
+ * @summary Get lightweight action data for map markers
+ */
+export const getActionMapData = async (params?: GetActionMapDataParams, options?: RequestInit): Promise<ActionMarker[]> => {
+
+  return customFetch<ActionMarker[]>(getGetActionMapDataUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetActionMapDataQueryKey = (params?: GetActionMapDataParams,) => {
+    return [
+    `/api/actions/map`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetActionMapDataQueryOptions = <TData = Awaited<ReturnType<typeof getActionMapData>>, TError = ErrorType<unknown>>(params?: GetActionMapDataParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActionMapData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetActionMapDataQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getActionMapData>>> = ({ signal }) => getActionMapData(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getActionMapData>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetActionMapDataQueryResult = NonNullable<Awaited<ReturnType<typeof getActionMapData>>>
+export type GetActionMapDataQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get lightweight action data for map markers
+ */
+
+export function useGetActionMapData<TData = Awaited<ReturnType<typeof getActionMapData>>, TError = ErrorType<unknown>>(
+ params?: GetActionMapDataParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getActionMapData>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetActionMapDataQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

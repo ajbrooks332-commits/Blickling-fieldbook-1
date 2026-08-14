@@ -539,6 +539,22 @@ export interface ObservationMarker {
   safetyIssue?: boolean;
 }
 
+export interface ActionMarker {
+  id: number;
+  title: string;
+  referenceNumber?: string;
+  priority: string;
+  status: string;
+  latitude: number;
+  longitude: number;
+  /** @nullable */
+  namedLocationName?: string | null;
+  /** @nullable */
+  observationId?: number | null;
+  /** @nullable */
+  dueDate?: string | null;
+}
+
 export type ObservationInputPriority = typeof ObservationInputPriority[keyof typeof ObservationInputPriority];
 
 
@@ -928,6 +944,20 @@ categoryId?: number;
 namedLocationId?: number;
 safetyIssue?: boolean;
 };
+
+export type GetActionMapDataParams = {
+bucket?: GetActionMapDataBucket;
+priority?: string;
+namedLocationId?: number;
+};
+
+export type GetActionMapDataBucket = typeof GetActionMapDataBucket[keyof typeof GetActionMapDataBucket];
+
+
+export const GetActionMapDataBucket = {
+  open: 'open',
+  completed: 'completed',
+} as const;
 
 export type ListActionsParams = {
 status?: string;

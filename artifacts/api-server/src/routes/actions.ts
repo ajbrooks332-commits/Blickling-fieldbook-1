@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { and, asc, count, desc, eq, ilike, isNull, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { z } from "zod";
 import {
   actionsTable, auditEventsTable, db, namedLocationsTable, notesTable, observationsTable, usersTable,
@@ -177,6 +178,46 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
   const replayed = action.referenceNumber !== referenceNumber;
   if (replayed) res.setHeader("X-Idempotent-Replay", "true");
   res.status(replayed ? 200 : 201).json(full);
+});
+
+router.get("/map", requireAuth, async (req, res) => {
+  const query = z.object({
+    bucket: z.enum(["open", "completed"]).optional(), priority: priority.optional(), namedLocationId: idSchema.optional(),
+  }).safeParse(req.query);
+  if (!query.success) return validationError(res, query.error);
+  const q = query.data;
+  const actionLoc = alias(namedLocationsTable, "action_loc");
+  const latitude = sql<number>`COALESCE(${observationsTable.latitude}, ${actionLoc.latitude}, ${namedLocationsTable.latitude})`;
+  const longitude = sql<number>`COALESCE(${observationsTable.longitude}, ${actionLoc.longitude}, ${namedLocationsTable.longitude})`;
+  const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt),
+    sql`${latitude} IS NOT NULL`, sql`${longitude} IS NOT NULL`];
+  if (q.bucket === "open" || !q.bucket) conditions.push(sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`);
+  if (q.bucket === "completed") conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
+  if (q.priority) conditions.push(eq(actionsTable.priority, q.priority));
+  if (q.namedLocationId) conditions.push(sql`COALESCE(${actionsTable.namedLocationId}, ${observationsTable.namedLocationId}) = ${q.namedLocationId}`);
+  const where = and(...conditions);
+  const [rows, totals] = await Promise.all([
+    db.select({
+      id: actionsTable.id, title: actionsTable.title, referenceNumber: actionsTable.referenceNumber,
+      priority: actionsTable.priority, status: actionsTable.status, latitude, longitude,
+      namedLocationName: sql<string | null>`COALESCE(${actionLoc.name}, ${namedLocationsTable.name})`,
+      observationId: actionsTable.observationId, dueDate: actionsTable.dueDate,
+    })
+      .from(actionsTable)
+      .leftJoin(observationsTable, eq(actionsTable.observationId, observationsTable.id))
+      .leftJoin(actionLoc, eq(actionsTable.namedLocationId, actionLoc.id))
+      .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id))
+      .where(where).orderBy(desc(actionsTable.createdAt)).limit(500),
+    db.select({ total: count() }).from(actionsTable)
+      .leftJoin(observationsTable, eq(actionsTable.observationId, observationsTable.id))
+      .leftJoin(actionLoc, eq(actionsTable.namedLocationId, actionLoc.id))
+      .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id))
+      .where(where),
+  ]);
+  const total = Number(totals[0]?.total ?? 0);
+  res.setHeader("X-Total-Count", String(total));
+  res.setHeader("X-Result-Truncated", String(total > rows.length));
+  res.json(rows);
 });
 
 router.get("/:id", requireAuth, async (req, res) => {

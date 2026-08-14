@@ -486,6 +486,30 @@ export const GetObservationMapDataResponse = zod.array(GetObservationMapDataResp
 
 
 /**
+ * @summary Get lightweight action data for map markers
+ */
+export const GetActionMapDataQueryParams = zod.object({
+  "bucket": zod.enum(['open', 'completed']).optional(),
+  "priority": zod.coerce.string().optional(),
+  "namedLocationId": zod.coerce.number().optional()
+})
+
+export const GetActionMapDataResponseItem = zod.object({
+  "id": zod.number(),
+  "title": zod.string(),
+  "referenceNumber": zod.string().optional(),
+  "priority": zod.string(),
+  "status": zod.string(),
+  "latitude": zod.number(),
+  "longitude": zod.number(),
+  "namedLocationName": zod.string().nullish(),
+  "observationId": zod.number().nullish(),
+  "dueDate": zod.string().nullish()
+})
+export const GetActionMapDataResponse = zod.array(GetActionMapDataResponseItem)
+
+
+/**
  * @summary Get full observation detail
  */
 export const GetObservationParams = zod.object({
