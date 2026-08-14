@@ -74,13 +74,6 @@ const PRIORITY_COLORS: Record<string, string> = {
   low: '#8b949e',
 }
 
-const PRIORITY_LABELS: Record<string, string> = {
-  urgent: 'Urgent',
-  high: 'High',
-  normal: 'Normal',
-  low: 'Low',
-}
-
 const STATUS_OPTIONS = [
   { value: '', label: 'All statuses' },
   { value: 'draft', label: 'Draft' },
@@ -100,12 +93,6 @@ const PRIORITY_OPTIONS = [
   { value: 'normal', label: 'Normal' },
   { value: 'low', label: 'Low' },
 ]
-
-function getPriorityBadgeHtml(priority: string): string {
-  const color = PRIORITY_COLORS[priority] || '#8b949e'
-  const label = PRIORITY_LABELS[priority] || priority
-  return `<span style="display:inline-block;padding:2px 8px;background:${color}20;color:${color};border-radius:9999px;font-size:11px;font-weight:600;border:1px solid ${color}40">${label}</span>`
-}
 
 function buildQueryString(filters: Filters): string {
   const params = new URLSearchParams()
@@ -148,9 +135,10 @@ interface FilterPanelProps {
   categories: Array<{ id: number; name: string }>
   locations: Array<{ id: number; name: string }>
   markerCount: number
+  taskCount: number
 }
 
-function FilterPanel({ filters, onChange, onClear, categories, locations, markerCount }: FilterPanelProps) {
+function FilterPanel({ filters, onChange, onClear, categories, locations, markerCount, taskCount }: FilterPanelProps) {
   const active = hasActiveFilters(filters)
   return (
     <div className="flex flex-col gap-4 p-4 h-full overflow-y-auto" style={{ background: C.surface }}>
@@ -180,7 +168,7 @@ function FilterPanel({ filters, onChange, onClear, categories, locations, marker
       >
         <MapPin className="h-3.5 w-3.5" style={{ color: C.emerald }} />
         <span style={{ ...BODY, fontSize: 12, color: C.muted }}>
-          <strong style={{ color: C.text }}>{markerCount}</strong> observation{markerCount !== 1 ? 's' : ''} on map
+          <strong style={{ color: C.text }}>{markerCount}</strong> observation{markerCount !== 1 ? 's' : ''} · <strong style={{ color: C.text }}>{taskCount}</strong> task{taskCount !== 1 ? 's' : ''} on map
         </span>
       </div>
 
@@ -330,6 +318,8 @@ export default function MapView() {
   const [error, setError] = useState<string | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalMarkers, setTotalMarkers] = useState(0)
+  const [taskTruncated, setTaskTruncated] = useState(false)
+  const [totalTaskMarkers, setTotalTaskMarkers] = useState(0)
 
   const { data: categories = [] } = useListCategories()
   const { data: locations = [] } = useListLocations()
@@ -387,6 +377,8 @@ export default function MapView() {
       setTaskMarkers(taskData)
       setTotalMarkers(Number(res.headers.get("X-Total-Count") ?? data.length))
       setTruncated(res.headers.get("X-Result-Truncated") === "true")
+      setTotalTaskMarkers(Number(taskRes.headers.get("X-Total-Count") ?? taskData.length))
+      setTaskTruncated(taskRes.headers.get("X-Result-Truncated") === "true")
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return
       setError(err instanceof Error ? err.message : "Map observations could not be loaded.")
@@ -417,17 +409,16 @@ export default function MapView() {
     group.clearLayers()
     markers.forEach((m) => {
       const color = PRIORITY_COLORS[m.priority] || '#8b949e'
-      const circle = L.circleMarker([m.latitude, m.longitude], {
-        radius: 8,
-        fillColor: color,
-        color: '#fff',
-        weight: 2,
-        opacity: 1,
-        fillOpacity: 0.85,
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="width:16px;height:16px;background:${color};border:2px solid #fff;border-radius:9999px;box-shadow:0 1px 3px rgba(0,0,0,0.4)"></div>`,
+        iconSize: [16, 16],
+        iconAnchor: [8, 8],
       })
-      circle.bindTooltip(`${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.title)}`, { direction: 'top' })
-      circle.on('click', () => navigate(`/observations/${m.id}`))
-      group.addLayer(circle)
+      const marker = L.marker([m.latitude, m.longitude], { icon, keyboard: true, title: `Observation ${m.referenceNumber}: ${m.title}` })
+      marker.bindTooltip(`${escapeHtml(m.referenceNumber)} · ${escapeHtml(m.title)}`, { direction: 'top' })
+      marker.on('click', () => navigate(`/observations/${m.id}`))
+      group.addLayer(marker)
     })
     taskMarkers.forEach((t) => {
       const color = PRIORITY_COLORS[t.priority] || '#8b949e'
@@ -455,6 +446,7 @@ export default function MapView() {
       categories={categories}
       locations={locations}
       markerCount={markers.length}
+      taskCount={taskMarkers.length}
     />
   )
 
@@ -546,7 +538,11 @@ export default function MapView() {
           </div>
         </div>
         {error && <div role="alert" className="z-10 border-b border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
-        {truncated && <div role="status" className="z-10 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">Showing the newest {markers.length} of {totalMarkers} matching observations. Narrow the filters to see a complete set.</div>}
+        {(truncated || taskTruncated) && <div role="status" className="z-10 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
+          {truncated && `Showing the newest ${markers.length} of ${totalMarkers} matching observations. `}
+          {taskTruncated && `Showing the newest ${taskMarkers.length} of ${totalTaskMarkers} matching tasks. `}
+          Narrow the filters to see a complete set.
+        </div>}
 
         {/* Map container */}
         <div className="relative flex-1">
@@ -571,7 +567,7 @@ export default function MapView() {
           )}
 
           {/* Empty state overlay */}
-          {!loading && markers.length === 0 && (
+          {!loading && markers.length === 0 && taskMarkers.length === 0 && (
             <div className="absolute inset-0 flex items-center justify-center pointer-events-none z-10">
               <div
                 className="backdrop-blur-sm rounded-xl px-6 py-5 text-center max-w-xs pointer-events-auto"
@@ -579,7 +575,7 @@ export default function MapView() {
               >
                 <MapPin className="h-8 w-8 mx-auto mb-2" style={{ color: C.dim }} />
                 <p style={{ ...HEAD, fontSize: 14, fontWeight: 500, color: C.muted }}>
-                  No observations with coordinates found
+                  No observations or tasks with coordinates found
                 </p>
                 {active && (
                   <button
