@@ -6,19 +6,27 @@
  */
 import { sql } from "drizzle-orm";
 import {
-  actionImagesTable, actionsTable, appSettingsTable, auditEventsTable, categoriesTable, db, namedLocationsTable,
-  notesTable, observationImagesTable, observationsTable, pool, propertiesTable, referenceCountersTable,
-  uploadGrantsTable, usersTable,
+  actionImagesTable, actionsTable, activityLogLocationsTable, activityLogParticipantsTable,
+  activityLogsTable, activityTypesTable, appSettingsTable, auditEventsTable, categoriesTable, db,
+  namedLocationsTable, notesTable, observationImagesTable, observationsTable, pool, propertiesTable,
+  referenceCountersTable, uploadGrantsTable, usersTable,
 } from "@workspace/db";
 import { defaultCategories, defaultLocations } from "./lib/referenceData";
 
-async function seed() {
+export async function seed() {
   if (process.env.NODE_ENV === "production") throw new Error("The destructive seed is disabled in production.");
   if (process.env.ALLOW_DESTRUCTIVE_SEED !== "true") {
     throw new Error("Set ALLOW_DESTRUCTIVE_SEED=true to confirm replacement of local development data.");
   }
 
   await db.transaction(async (tx) => {
+    // Deletion order matters: children before parents. Activity tables
+    // reference users, activity types and named locations, so they must go
+    // before those tables or the seed fails on any database with activity data.
+    await tx.delete(activityLogParticipantsTable);
+    await tx.delete(activityLogLocationsTable);
+    await tx.delete(activityLogsTable);
+    await tx.delete(activityTypesTable);
     await tx.delete(observationImagesTable);
     await tx.delete(actionImagesTable);
     await tx.delete(auditEventsTable);
@@ -55,7 +63,11 @@ async function seed() {
   console.info("Start the app and use SETUP_SECRET on the setup screen to create the administrator.");
 }
 
-seed().catch((error) => {
-  console.error("Development seed failed:", error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-}).finally(() => pool.end());
+// Only run (and close the pool) when executed as a script, so tests can
+// import and drive the seed themselves.
+if (process.argv[1] && import.meta.url === new URL(`file://${process.argv[1]}`).href) {
+  seed().catch((error) => {
+    console.error("Development seed failed:", error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  }).finally(() => pool.end());
+}

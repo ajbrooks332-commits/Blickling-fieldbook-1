@@ -399,6 +399,36 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
     assert.equal(rebaselined.rows[0].n, migrationLedger.statements.length);
     const after = await pool.query<{ n: string }>("SELECT count(*)::text AS n FROM users");
     assert.equal(after.rows[0].n, before.rows[0].n);
+
+    // --- Development seed: must complete on a database containing activity
+    // references (activity logs/participants/locations reference users,
+    // types and named locations), and must be explicitly opted into.
+    const seedModule = await import("../seed");
+    delete process.env.ALLOW_DESTRUCTIVE_SEED;
+    await assert.rejects(seedModule.seed(), /ALLOW_DESTRUCTIVE_SEED/);
+
+    const [{ uid, locid }] = (await pool.query<{ uid: number; locid: number }>(
+      "SELECT (SELECT id FROM users LIMIT 1) AS uid, (SELECT id FROM named_locations LIMIT 1) AS locid")).rows;
+    const typeRow = await pool.query<{ id: number }>(
+      "INSERT INTO activity_types (property_id, name, category) SELECT id, 'Seed test type', 'Other' FROM properties LIMIT 1 RETURNING id");
+    const logRow = await pool.query<{ id: number }>(
+      `INSERT INTO activity_logs (property_id, activity_type_id, named_location_id, activity_date, duration_minutes, recorded_by_user_id)
+       SELECT p.id, $1, $2, '2026-08-01', 60, $3 FROM properties p LIMIT 1 RETURNING id`,
+      [typeRow.rows[0].id, locid, uid]);
+    await pool.query("INSERT INTO activity_log_participants (activity_log_id, user_id) VALUES ($1, $2)", [logRow.rows[0].id, uid]);
+    await pool.query("INSERT INTO activity_log_locations (activity_log_id, named_location_id) VALUES ($1, $2)", [logRow.rows[0].id, locid]);
+
+    process.env.ALLOW_DESTRUCTIVE_SEED = "true";
+    await seedModule.seed();
+    const seeded = await pool.query(`
+      SELECT (SELECT count(*)::int FROM activity_logs) AS logs,
+             (SELECT count(*)::int FROM users) AS users,
+             (SELECT count(*)::int FROM categories) AS categories,
+             (SELECT count(*)::int FROM named_locations) AS locations`);
+    assert.equal(seeded.rows[0].logs, 0);
+    assert.equal(seeded.rows[0].users, 0);
+    assert.ok(seeded.rows[0].categories > 0);
+    assert.ok(seeded.rows[0].locations > 0);
   } finally {
     await pool.end();
   }
