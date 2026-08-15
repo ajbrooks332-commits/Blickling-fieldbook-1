@@ -668,6 +668,8 @@ export const ObservationUpdatePriority = {
 } as const;
 
 export interface ObservationUpdate {
+  /** Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409. */
+  expectedUpdatedAt?: string;
   /** @maxLength 200 */
   title?: string;
   /** @nullable */
@@ -823,6 +825,8 @@ export const ActionUpdatePriority = {
 } as const;
 
 export interface ActionUpdate {
+  /** Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409. */
+  expectedUpdatedAt?: string;
   title?: string;
   /** @nullable */
   description?: string | null;

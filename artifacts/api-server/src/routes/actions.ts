@@ -24,7 +24,10 @@ const createSchema = z.object({
   createdOffline: z.boolean().default(false), offlineId: z.string().uuid().optional().nullable(),
   deviceCreatedAt: z.string().datetime({ offset: true }).optional().nullable(),
 }).strict();
-const updateSchema = createSchema.omit({ status: true, notes: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial().strict();
+const updateSchema = createSchema.omit({ status: true, notes: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial()
+  // Optimistic concurrency token: the record's updatedAt as last seen by the
+  // editor. A mismatch means someone else saved in the meantime → 409.
+  .extend({ expectedUpdatedAt: z.string().datetime().optional() }).strict();
 
 const actionFields = {
   id: actionsTable.id, referenceNumber: actionsTable.referenceNumber, title: actionsTable.title,
@@ -356,9 +359,16 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
   if (parsed.data.namedLocationId !== undefined && !(await validateLocation(user.propertyId!, parsed.data.namedLocationId))) {
     return void res.status(400).json({ error: "Location not found for this estate" });
   }
-  const updates: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
-  if (parsed.data.dueDate !== undefined) updates.dueDate = toDueDate(parsed.data.dueDate);
-  const changes = Object.entries(parsed.data).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
+  const { expectedUpdatedAt, ...fields } = parsed.data;
+  if (expectedUpdatedAt !== undefined && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
+    return void res.status(409).json({
+      error: "This task was changed by someone else while you were editing. Reload to see the latest version, then reapply your changes.",
+      code: "edit_conflict", currentUpdatedAt: existing.updatedAt.toISOString(),
+    });
+  }
+  const updates: Record<string, unknown> = { ...fields, updatedAt: new Date() };
+  if (fields.dueDate !== undefined) updates.dueDate = toDueDate(fields.dueDate);
+  const changes = Object.entries(fields).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
   const updated = await db.transaction(async (tx) => {
     const [row] = await tx.update(actionsTable).set(updates).where(eq(actionsTable.id, id.data)).returning();
     if (changes.length) await tx.insert(auditEventsTable).values(changes.map(([fieldName, value]) => ({

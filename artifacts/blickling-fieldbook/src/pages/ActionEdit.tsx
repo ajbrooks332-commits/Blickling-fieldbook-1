@@ -28,7 +28,9 @@ export default function ActionEdit() {
     update.mutate({ id: numericId, data: { title: form.title, description: form.description || null,
       assignedToUserId: Number(form.assignedToUserId), priority: form.priority as typeof action.priority,
       dueDate: form.dueDate || null, estimatedMinutes: form.estimatedMinutes ? Number(form.estimatedMinutes) : null,
-      equipmentRequired: form.equipmentRequired, contractorRequired: form.contractorRequired } }, {
+      equipmentRequired: form.equipmentRequired, contractorRequired: form.contractorRequired,
+      // Optimistic concurrency: a concurrent edit by someone else returns 409.
+      expectedUpdatedAt: action.updatedAt ? new Date(action.updatedAt).toISOString() : undefined } }, {
       onSuccess: async () => { await Promise.all([queryClient.invalidateQueries({ queryKey: getGetActionQueryKey(numericId) }),
         queryClient.invalidateQueries({ queryKey: getListActionsQueryKey() })]); setLocation(`/actions/${numericId}`); },
       onError: (err) => setMessage(err instanceof Error ? err.message : "Update failed."),

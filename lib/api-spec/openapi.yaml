@@ -1911,6 +1911,10 @@ components:
     ObservationUpdate:
       type: object
       properties:
+        expectedUpdatedAt:
+          type: string
+          format: date-time
+          description: Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409.
         title:
           type: string
           maxLength: 200
@@ -2149,6 +2153,10 @@ components:
     ActionUpdate:
       type: object
       properties:
+        expectedUpdatedAt:
+          type: string
+          format: date-time
+          description: Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409.
         title:
           type: string
         description:

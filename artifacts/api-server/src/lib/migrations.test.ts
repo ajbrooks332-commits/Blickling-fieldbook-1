@@ -359,6 +359,17 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       assert.ok(packBody.tasks.every((t) => t.status !== "completed" && t.status !== "cancelled"));
       assert.equal(packBody.counts.total, packBody.tasks.length);
 
+      // Optimistic concurrency: a stale expectedUpdatedAt must be rejected 409;
+      // the current token must be accepted.
+      const staleEdit = await mutate(`/api/observations/${observation.id}`, "PATCH",
+        { title: "Stale edit", expectedUpdatedAt: "2000-01-01T00:00:00.000Z" });
+      assert.equal(staleEdit.status, 409);
+      const currentObs = await fetch(`${origin}/api/observations/${observation.id}`, { headers: { Cookie: cookie } });
+      const currentObsBody = await currentObs.json() as { updatedAt: string };
+      const freshEdit = await mutate(`/api/observations/${observation.id}`, "PATCH",
+        { title: "Fresh edit", expectedUpdatedAt: new Date(currentObsBody.updatedAt).toISOString() });
+      assert.equal(freshEdit.status, 200);
+
       // Re-archive so later reference-data assertions see the original state.
       const rearchiveAct = await mutate(`/api/actions/${action.id}`, "DELETE");
       assert.equal(rearchiveAct.status, 204);

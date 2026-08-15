@@ -8,6 +8,8 @@
 import type { ActionUpdatePriority } from './actionUpdatePriority';
 
 export interface ActionUpdate {
+  /** Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409. */
+  expectedUpdatedAt?: Date;
   title?: string;
   /** @nullable */
   description?: string | null;

@@ -47,6 +47,8 @@ export default function ObservationEdit() {
       latitude, longitude,
       safetyIssue: form.safetyIssue, publicAccessAffected: form.publicAccessAffected,
       machineryRequired: form.machineryRequired, specialistRequired: form.specialistRequired, followUpRequired: form.followUpRequired,
+      // Optimistic concurrency: a concurrent edit by someone else returns 409.
+      expectedUpdatedAt: observation.updatedAt ? new Date(observation.updatedAt).toISOString() : undefined,
     } }, { onSuccess: async () => {
       await Promise.all([queryClient.invalidateQueries({ queryKey: getGetObservationQueryKey(numericId) }),
         queryClient.invalidateQueries({ queryKey: getListObservationsQueryKey() })]);

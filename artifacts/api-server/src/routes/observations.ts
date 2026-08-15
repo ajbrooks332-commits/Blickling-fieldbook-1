@@ -32,7 +32,10 @@ const observationBase = z.object({
 const createSchema = observationBase.refine((value) => (value.latitude == null) === (value.longitude == null), {
   message: "Latitude and longitude must be supplied together",
 });
-const updateSchema = observationBase.omit({ status: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial().strict()
+const updateSchema = observationBase.omit({ status: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial()
+  // Optimistic concurrency token: the record's updatedAt as last seen by the
+  // editor. A mismatch means someone else saved in the meantime → 409.
+  .extend({ expectedUpdatedAt: z.string().datetime().optional() }).strict()
   .refine((value) => {
     if (value.latitude === undefined && value.longitude === undefined) return true;
     return (value.latitude == null) === (value.longitude == null);
@@ -258,9 +261,16 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
     parsed.data.namedLocationId === undefined || parsed.data.namedLocationId === existing.namedLocationId ? undefined : parsed.data.namedLocationId,
   );
   if (relationError) return void res.status(400).json({ error: relationError });
-  const updates: Record<string, unknown> = { ...parsed.data, updatedAt: new Date() };
-  if (parsed.data.observedAt) updates.observedAt = new Date(parsed.data.observedAt);
-  const changes = Object.entries(parsed.data).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
+  const { expectedUpdatedAt, ...fields } = parsed.data;
+  if (expectedUpdatedAt !== undefined && existing.updatedAt.toISOString() !== expectedUpdatedAt) {
+    return void res.status(409).json({
+      error: "This observation was changed by someone else while you were editing. Reload to see the latest version, then reapply your changes.",
+      code: "edit_conflict", currentUpdatedAt: existing.updatedAt.toISOString(),
+    });
+  }
+  const updates: Record<string, unknown> = { ...fields, updatedAt: new Date() };
+  if (fields.observedAt) updates.observedAt = new Date(fields.observedAt);
+  const changes = Object.entries(fields).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
   const row = await db.transaction(async (tx) => {
     const [updated] = await tx.update(observationsTable).set(updates).where(eq(observationsTable.id, id.data)).returning();
     if (changes.length) await tx.insert(auditEventsTable).values(changes.map(([fieldName, value]) => ({

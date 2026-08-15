@@ -8,6 +8,8 @@
 import type { ObservationUpdatePriority } from './observationUpdatePriority';
 
 export interface ObservationUpdate {
+  /** Optimistic concurrency token — record's updatedAt as last seen. Mismatch returns 409. */
+  expectedUpdatedAt?: Date;
   /** @maxLength 200 */
   title?: string;
   /** @nullable */

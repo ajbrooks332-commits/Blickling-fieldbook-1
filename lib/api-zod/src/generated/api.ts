@@ -602,6 +602,7 @@ export const updateObservationBodyTitleMax = 200;
 
 
 export const UpdateObservationBody = zod.object({
+  "expectedUpdatedAt": zod.coerce.date().optional().describe('Optimistic concurrency token — record\'s updatedAt as last seen. Mismatch returns 409.'),
   "title": zod.string().max(updateObservationBodyTitleMax).optional(),
   "description": zod.string().nullish(),
   "categoryId": zod.number().optional(),
@@ -1010,6 +1011,7 @@ export const UpdateActionParams = zod.object({
 })
 
 export const UpdateActionBody = zod.object({
+  "expectedUpdatedAt": zod.coerce.date().optional().describe('Optimistic concurrency token — record\'s updatedAt as last seen. Mismatch returns 409.'),
   "title": zod.string().optional(),
   "description": zod.string().nullish(),
   "observationId": zod.number().nullish(),
