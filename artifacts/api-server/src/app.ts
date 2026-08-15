@@ -45,6 +45,14 @@ app.use(helmet({
   referrerPolicy: { policy: "no-referrer" },
 }));
 
+// Permissions Policy: geolocation is required (field recording); camera is
+// used via file input capture (which does not need the camera permission),
+// everything else is denied.
+app.use((_req, res, next) => {
+  res.setHeader("Permissions-Policy", "geolocation=(self), camera=(), microphone=(), payment=(), usb=()");
+  next();
+});
+
 // APP_ORIGIN is mandatory in production: same-origin checks must compare
 // against an explicit, operator-set origin, never a host-derived fallback.
 const appOrigin = process.env.APP_ORIGIN;
