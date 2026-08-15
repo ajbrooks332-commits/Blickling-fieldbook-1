@@ -16,6 +16,7 @@ const imageInput = z.object({
   fileSize: z.number().int().positive().max(10 * 1024 * 1024),
   caption: z.string().trim().max(1000).optional().nullable(),
   imageType: z.enum(["observation", "progress", "completion"]).optional(),
+  photoUuid: z.string().uuid().optional(),
 }).strict();
 
 router.get("/observations/:id/images", requireAuth, async (req, res) => {
@@ -38,6 +39,12 @@ router.post("/observations/:id/images", requireAuth, async (req, res) => {
   const [observation] = await db.select({ id: observationsTable.id, propertyId: observationsTable.propertyId }).from(observationsTable)
     .where(and(eq(observationsTable.id, id.data), eq(observationsTable.propertyId, user.propertyId!), isNull(observationsTable.deletedAt))).limit(1);
   if (!observation) return void res.status(404).json({ error: "Observation not found" });
+  // Idempotent replay: a retried queued upload must never attach twice.
+  if (parsed.data.photoUuid) {
+    const [existing] = await db.select().from(observationImagesTable)
+      .where(eq(observationImagesTable.photoUuid, parsed.data.photoUuid)).limit(1);
+    if (existing) return void res.status(200).json(existing);
+  }
   let normalised;
   try {
     normalised = await consumeUploadGrant(parsed.data.storageKey, user.id, user.propertyId!);
@@ -56,6 +63,7 @@ router.post("/observations/:id/images", requireAuth, async (req, res) => {
       fileSize: normalised.fileSize,
       caption: parsed.data.caption ?? null,
       imageType: parsed.data.imageType ?? "observation",
+      photoUuid: parsed.data.photoUuid ?? null,
       uploadedByUserId: user.id,
     }).returning();
     await tx.insert(auditEventsTable).values({
@@ -105,6 +113,12 @@ router.post("/actions/:id/images", requireAuth, async (req, res) => {
     eq(actionsTable.propertyId, user.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
   if (!action) return void res.status(404).json({ error: "Action not found" });
   if (!canUpdateAction(user, action.assignedToUserId)) return void res.status(403).json({ error: "Only the assignee or a manager may add action photos" });
+  // Idempotent replay: a retried queued upload must never attach twice.
+  if (parsed.data.photoUuid) {
+    const [existing] = await db.select().from(actionImagesTable)
+      .where(eq(actionImagesTable.photoUuid, parsed.data.photoUuid)).limit(1);
+    if (existing) return void res.status(200).json(existing);
+  }
   let normalised;
   try {
     normalised = await consumeUploadGrant(parsed.data.storageKey, user.id, user.propertyId!);
@@ -117,7 +131,7 @@ router.post("/actions/:id/images", requireAuth, async (req, res) => {
   const image = await db.transaction(async (tx) => {
     const [created] = await tx.insert(actionImagesTable).values({ actionId: id.data, storageKey: parsed.data.storageKey,
       originalFilename: normalised.originalFilename, mimeType: normalised.mimeType, fileSize: normalised.fileSize,
-      caption: parsed.data.caption ?? null, uploadedByUserId: user.id }).returning();
+      caption: parsed.data.caption ?? null, photoUuid: parsed.data.photoUuid ?? null, uploadedByUserId: user.id }).returning();
     await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, actionId: id.data,
       observationId: action.observationId, userId: user.id, eventType: "photo_added", newValue: normalised.originalFilename });
     return created;

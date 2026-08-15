@@ -104,7 +104,8 @@ async function uploadQueuedPhoto(entityType, entityId, photo) {
   if (!uploaded.ok) throw new Error("Queued photo upload failed");
   await apiJson(`/api/${entityType}/${entityId}/images`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ storageKey: grant.objectPath, originalFilename: photo.originalFilename, mimeType: photo.mimeType,
-      fileSize: photo.fileSize, ...(entityType === "observations" ? { imageType: "observation" } : {}) }) });
+      fileSize: photo.fileSize, ...(photo.photoUuid ? { photoUuid: photo.photoUuid } : {}),
+      ...(entityType === "observations" ? { imageType: "observation" } : {}) }) });
 }
 
 async function syncOutboxInWorker() {
@@ -117,7 +118,15 @@ async function syncOutboxInWorker() {
     try {
       if (record.kind === "observation") {
         const created = await apiJson("/api/observations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
-        for (const photo of record.photos || []) await uploadQueuedPhoto("observations", created.id, photo);
+        // Per-photo progress: persist after each success so a retry after a
+        // partial failure only re-attempts the photos still queued.
+        const queued = [...(record.photos || [])];
+        while (queued.length > 0) {
+          await uploadQueuedPhoto("observations", created.id, queued[0]);
+          queued.shift();
+          record.photos = queued;
+          await outboxOperation("readwrite", (store) => store.put(record));
+        }
       } else if (record.kind === "action") {
         await apiJson("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
       } else if (record.kind === "activity") {

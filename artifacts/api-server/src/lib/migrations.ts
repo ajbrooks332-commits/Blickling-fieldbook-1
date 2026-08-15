@@ -393,6 +393,12 @@ const statements = [
   // record must never create a duplicate.
   `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS offline_id text`,
   `CREATE UNIQUE INDEX IF NOT EXISTS activity_logs_offline_id_unique ON activity_logs (offline_id) WHERE offline_id IS NOT NULL`,
+  // Per-photo idempotency: retrying a partially-failed queued upload must
+  // never attach the same photograph twice.
+  `ALTER TABLE observation_images ADD COLUMN IF NOT EXISTS photo_uuid text`,
+  `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS photo_uuid text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS observation_images_photo_uuid_uq ON observation_images (photo_uuid) WHERE photo_uuid IS NOT NULL`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS action_images_photo_uuid_uq ON action_images (photo_uuid) WHERE photo_uuid IS NOT NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

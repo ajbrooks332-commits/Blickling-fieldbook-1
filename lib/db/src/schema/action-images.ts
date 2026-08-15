@@ -10,6 +10,8 @@ export const actionImagesTable = pgTable("action_images", {
   mimeType: text("mime_type").notNull(),
   fileSize: integer("file_size").notNull(),
   caption: text("caption"),
+  // Per-photo idempotency key for offline queue retries.
+  photoUuid: text("photo_uuid"),
   uploadedByUserId: integer("uploaded_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });

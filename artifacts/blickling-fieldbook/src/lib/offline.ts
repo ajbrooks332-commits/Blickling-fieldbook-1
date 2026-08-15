@@ -12,7 +12,12 @@ export interface OfflinePhoto {
   originalFilename: string;
   mimeType: string;
   fileSize: number;
+  /** Stable idempotency key so a retried upload never attaches twice. */
+  photoUuid?: string;
 }
+
+const withPhotoUuids = (photos: OfflinePhoto[]) =>
+  photos.map((photo) => ({ ...photo, photoUuid: photo.photoUuid ?? crypto.randomUUID() }));
 
 interface OutboxRecord {
   id: string;
@@ -63,7 +68,7 @@ async function transact<T>(mode: IDBTransactionMode, work: (store: IDBObjectStor
 
 export const queueObservation = async (payload: Record<string, unknown>, ownerUserId: number, photos: OfflinePhoto[] = []) => {
   const id = String(payload.offlineId ?? crypto.randomUUID());
-  await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "observation", createdAt: new Date().toISOString(), payload, photos } satisfies OutboxRecord));
+  await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "observation", createdAt: new Date().toISOString(), payload, photos: withPhotoUuids(photos) } satisfies OutboxRecord));
   notifyQueued();
   requestBackgroundSync();
   return id;
@@ -80,7 +85,7 @@ export const queueAction = async (payload: Record<string, unknown>, ownerUserId:
 export const queuePhoto = async (entityType: "observations" | "actions", entityId: number, photo: OfflinePhoto, ownerUserId: number) => {
   const id = crypto.randomUUID();
   await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "photo", createdAt: new Date().toISOString(), payload: {},
-    photos: [photo], entityType, entityId } satisfies OutboxRecord));
+    photos: withPhotoUuids([photo]), entityType, entityId } satisfies OutboxRecord));
   notifyQueued();
   requestBackgroundSync();
 };
@@ -167,7 +172,8 @@ export async function uploadPhoto(entityType: "observations" | "actions", entity
   if (!uploaded.ok) throw new Error("Photo upload failed");
   await apiJson(`/api/${entityType}/${entityId}/images`, { method: "POST", headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ storageKey: grant.objectPath, originalFilename: photo.originalFilename,
-      mimeType: photo.mimeType, fileSize: photo.fileSize, ...(entityType === "observations" ? { imageType: "observation" } : {}) }) });
+      mimeType: photo.mimeType, fileSize: photo.fileSize, ...(photo.photoUuid ? { photoUuid: photo.photoUuid } : {}),
+      ...(entityType === "observations" ? { imageType: "observation" } : {}) }) });
 }
 
 export async function syncOutbox(): Promise<{ synced: number; remaining: number }> {
@@ -181,7 +187,15 @@ export async function syncOutbox(): Promise<{ synced: number; remaining: number 
     try {
       if (record.kind === "observation") {
         const created = await apiJson<{ id: number }>("/api/observations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
-        for (const photo of record.photos ?? []) await uploadPhoto("observations", created.id, photo);
+        // Per-photo progress: persist after each success so a retry after a
+        // partial failure only re-attempts the photos still queued.
+        const queued = [...(record.photos ?? [])];
+        while (queued.length > 0) {
+          await uploadPhoto("observations", created.id, queued[0]);
+          queued.shift();
+          record.photos = queued;
+          await transact("readwrite", (store) => store.put(record));
+        }
       } else if (record.kind === "action") {
         await apiJson("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
       } else if (record.kind === "activity") {
