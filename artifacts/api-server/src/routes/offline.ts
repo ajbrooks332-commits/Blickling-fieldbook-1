@@ -32,8 +32,9 @@ router.get("/snapshot", requireAuth, async (req, res) => {
     db.select({ id: observationImagesTable.id, observationId: observationImagesTable.observationId,
       originalFilename: observationImagesTable.originalFilename, mimeType: observationImagesTable.mimeType,
       imageType: observationImagesTable.imageType, caption: observationImagesTable.caption,
+      storageKey: observationImagesTable.storageKey,
       createdAt: observationImagesTable.createdAt })
-      .from(observationImagesTable),
+      .from(observationImagesTable).where(isNull(observationImagesTable.deletedAt)),
   ]);
   // Keep only child rows that belong to this property's parents.
   const obsIds = new Set(observations.map((o) => o.id));

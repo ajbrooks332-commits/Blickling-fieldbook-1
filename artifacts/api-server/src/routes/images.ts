@@ -27,7 +27,8 @@ router.get("/observations/:id/images", requireAuth, async (req, res) => {
     .where(and(eq(observationsTable.id, id.data), eq(observationsTable.propertyId, propertyId), isNull(observationsTable.deletedAt))).limit(1);
   if (!observation) return void res.status(404).json({ error: "Observation not found" });
   const rows = await db.select().from(observationImagesTable)
-    .where(eq(observationImagesTable.observationId, id.data)).orderBy(observationImagesTable.createdAt);
+    .where(and(eq(observationImagesTable.observationId, id.data), isNull(observationImagesTable.deletedAt)))
+    .orderBy(observationImagesTable.createdAt);
   res.json(rows);
 });
 
@@ -86,9 +87,12 @@ router.delete("/observations/:id/images/:imageId", requireAuth, async (req, res)
       eq(observationsTable.propertyId, user.propertyId!), isNull(observationsTable.deletedAt))).limit(1);
   if (!row) return void res.status(404).json({ error: "Image not found" });
   if (!isManager(user) && row.image.uploadedByUserId !== user.id) return void res.status(403).json({ error: "Insufficient permissions" });
-  await storage.deleteObjectEntity(row.image.storageKey);
+  if (row.image.deletedAt) return void res.status(404).json({ error: "Image not found" });
+  // Recoverable delete: mark the row deleted and keep the object bytes so an
+  // operator can restore. No purge happens in this flow.
   await db.transaction(async (tx) => {
-    await tx.delete(observationImagesTable).where(eq(observationImagesTable.id, imageId.data));
+    await tx.update(observationImagesTable).set({ deletedAt: new Date(), deletedByUserId: user.id })
+      .where(eq(observationImagesTable.id, imageId.data));
     await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, observationId: id.data, userId: user.id,
       eventType: "photo_removed", previousValue: row.image.originalFilename });
   });
@@ -101,7 +105,9 @@ router.get("/actions/:id/images", requireAuth, async (req, res) => {
   const [action] = await db.select({ id: actionsTable.id }).from(actionsTable)
     .where(and(eq(actionsTable.id, id.data), eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
   if (!action) return void res.status(404).json({ error: "Action not found" });
-  res.json(await db.select().from(actionImagesTable).where(eq(actionImagesTable.actionId, id.data)).orderBy(actionImagesTable.createdAt));
+  res.json(await db.select().from(actionImagesTable)
+    .where(and(eq(actionImagesTable.actionId, id.data), isNull(actionImagesTable.deletedAt)))
+    .orderBy(actionImagesTable.createdAt));
 });
 
 router.post("/actions/:id/images", requireAuth, async (req, res) => {
@@ -152,9 +158,11 @@ router.delete("/actions/:id/images/:imageId", requireAuth, async (req, res) => {
   if (!canUpdateAction(user, row.action.assignedToUserId) || (!isManager(user) && row.image.uploadedByUserId !== user.id)) {
     return void res.status(403).json({ error: "Insufficient permissions" });
   }
-  await storage.deleteObjectEntity(row.image.storageKey);
+  if (row.image.deletedAt) return void res.status(404).json({ error: "Image not found" });
+  // Recoverable delete: mark the row deleted and keep the object bytes.
   await db.transaction(async (tx) => {
-    await tx.delete(actionImagesTable).where(eq(actionImagesTable.id, imageId.data));
+    await tx.update(actionImagesTable).set({ deletedAt: new Date(), deletedByUserId: user.id })
+      .where(eq(actionImagesTable.id, imageId.data));
     await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, actionId: id.data,
       observationId: row.action.observationId, userId: user.id, eventType: "photo_removed", previousValue: row.image.originalFilename });
   });

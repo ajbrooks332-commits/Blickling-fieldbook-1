@@ -14,6 +14,9 @@ export const actionImagesTable = pgTable("action_images", {
   photoUuid: text("photo_uuid"),
   uploadedByUserId: integer("uploaded_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Soft delete: bytes are retained; nothing is permanently purged here.
+  deletedAt: timestamp("deleted_at"),
+  deletedByUserId: integer("deleted_by_user_id").references(() => usersTable.id),
 });
 
 export type ActionImage = typeof actionImagesTable.$inferSelect;

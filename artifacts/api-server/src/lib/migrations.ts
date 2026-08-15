@@ -403,6 +403,12 @@ const statements = [
   // (created_at) and sync (synced_at) timestamps separately.
   `ALTER TABLE observations ADD COLUMN IF NOT EXISTS device_created_at timestamp`,
   `ALTER TABLE actions ADD COLUMN IF NOT EXISTS device_created_at timestamp`,
+  // Recoverable image deletion: rows are soft-deleted and object bytes are
+  // never removed before (or after) the database/audit state commits.
+  `ALTER TABLE observation_images ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
+  `ALTER TABLE observation_images ADD COLUMN IF NOT EXISTS deleted_by_user_id integer REFERENCES users(id)`,
+  `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
+  `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS deleted_by_user_id integer REFERENCES users(id)`,
 ];
 
 export async function runMigrations(): Promise<void> {
