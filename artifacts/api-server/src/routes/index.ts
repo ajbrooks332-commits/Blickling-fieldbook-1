@@ -10,6 +10,7 @@ import notesRouter from "./notes";
 import activitiesRouter from "./activities";
 import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
+import exportRouter from "./export";
 import storageRouter from "./storage";
 import imagesRouter from "./images";
 import offlineRouter from "./offline";
@@ -30,6 +31,7 @@ router.use("/notes", notesRouter);
 router.use(activitiesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/reports", reportsRouter);
+router.use("/reports", exportRouter);
 router.use(imagesRouter);
 router.use("/offline", offlineRouter);
 

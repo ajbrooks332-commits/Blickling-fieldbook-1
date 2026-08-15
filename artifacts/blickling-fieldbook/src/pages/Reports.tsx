@@ -30,6 +30,7 @@ export default function Reports() {
   })
   const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0])
   const [exporting, setExporting] = useState(false)
+  const [exportingXlsx, setExportingXlsx] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
 
   const reportParams = { dateFrom, dateTo }
@@ -49,6 +50,17 @@ export default function Reports() {
       URL.revokeObjectURL(url)
     } catch (error) { setExportError(error instanceof Error ? error.message : "CSV export failed.") }
     finally { setExporting(false) }
+  }
+  const handleExcelExport = async () => {
+    setExportingXlsx(true); setExportError(null)
+    try {
+      const response = await apiFetch(`/api/reports/export.xlsx`)
+      if (!response.ok) throw new Error((await response.json().catch(() => null) as { error?: string } | null)?.error ?? "Excel export failed.")
+      const url = URL.createObjectURL(await response.blob())
+      const anchor = document.createElement("a"); anchor.href = url; anchor.download = `blickling-fieldbook-export-${new Date().toISOString().slice(0, 10)}.xlsx`; anchor.click()
+      URL.revokeObjectURL(url)
+    } catch (error) { setExportError(error instanceof Error ? error.message : "Excel export failed.") }
+    finally { setExportingXlsx(false) }
   }
 
   if (isLoading) {
@@ -110,6 +122,16 @@ export default function Reports() {
             onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
           >
             <Download className="w-4 h-4" /> {exporting ? "Exporting…" : "Export CSV"}
+          </button>
+          <button
+            onClick={handleExcelExport}
+            disabled={exportingXlsx}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
+            style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD }}
+            onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
+            onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
+          >
+            <Download className="w-4 h-4" /> {exportingXlsx ? "Exporting…" : "Export Excel (full)"}
           </button>
         </div>
       </div>
