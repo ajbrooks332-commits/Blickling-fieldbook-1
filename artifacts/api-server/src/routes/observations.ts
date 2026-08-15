@@ -271,14 +271,30 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
   const updates: Record<string, unknown> = { ...fields, updatedAt: new Date() };
   if (fields.observedAt) updates.observedAt = new Date(fields.observedAt);
   const changes = Object.entries(fields).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
+  // Compare-and-swap: when a token is supplied the UPDATE itself is conditional
+  // on updatedAt, so two concurrent editors cannot both succeed.
+  const updateCondition = expectedUpdatedAt !== undefined
+    ? and(eq(observationsTable.id, id.data), eq(observationsTable.updatedAt, new Date(expectedUpdatedAt)))
+    : eq(observationsTable.id, id.data);
   const row = await db.transaction(async (tx) => {
-    const [updated] = await tx.update(observationsTable).set(updates).where(eq(observationsTable.id, id.data)).returning();
+    const [updated] = await tx.update(observationsTable).set(updates).where(updateCondition).returning();
+    if (!updated) return undefined;
     if (changes.length) await tx.insert(auditEventsTable).values(changes.map(([fieldName, value]) => ({
       propertyId: user.propertyId!, observationId: id.data, userId: user.id, eventType: "observation_edited", fieldName,
       previousValue: String(existing[fieldName as keyof typeof existing] ?? ""), newValue: String(value ?? ""),
     })));
     return updated;
   });
+  if (!row) {
+    // Lost the race between our read and the conditional update.
+    const [current] = await db.select().from(observationsTable).where(and(eq(observationsTable.id, id.data),
+      eq(observationsTable.propertyId, user.propertyId!), isNull(observationsTable.deletedAt))).limit(1);
+    if (!current) return void res.status(404).json({ error: "Observation not found" });
+    return void res.status(409).json({
+      error: "This observation was changed by someone else while you were editing. Reload to see the latest version, then reapply your changes.",
+      code: "edit_conflict", currentUpdatedAt: current.updatedAt.toISOString(),
+    });
+  }
   res.json(row);
 });
 

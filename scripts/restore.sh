@@ -2,8 +2,11 @@
 # Restore a Blickling Fieldbook backup into a target database.
 # Usage: TARGET_DATABASE_URL=postgres://... ./scripts/restore.sh backups/fieldbook_YYYYMMDDTHHMMSSZ.dump
 #
-# SAFETY: this replaces the contents of the target database. For a restore
-# rehearsal, always point TARGET_DATABASE_URL at a scratch database first.
+# SAFETY: restore into a FRESHLY CREATED, EMPTY database and repoint the app.
+# `pg_restore --clean` only drops objects that exist in the archive — tables
+# created after the backup was taken would survive a restore into a live
+# database and can break later migrations or retain data that should be gone.
+# Recreate the target first (e.g. `dropdb`/`createdb` or DROP/CREATE DATABASE).
 set -euo pipefail
 
 FILE="${1:?Usage: restore.sh <dump-file>}"

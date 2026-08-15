@@ -369,8 +369,14 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
   const updates: Record<string, unknown> = { ...fields, updatedAt: new Date() };
   if (fields.dueDate !== undefined) updates.dueDate = toDueDate(fields.dueDate);
   const changes = Object.entries(fields).filter(([key, value]) => JSON.stringify(existing[key as keyof typeof existing]) !== JSON.stringify(value));
+  // Compare-and-swap: when a token is supplied the UPDATE itself is conditional
+  // on updatedAt, so two concurrent editors cannot both succeed.
+  const updateCondition = expectedUpdatedAt !== undefined
+    ? and(eq(actionsTable.id, id.data), eq(actionsTable.updatedAt, new Date(expectedUpdatedAt)))
+    : eq(actionsTable.id, id.data);
   const updated = await db.transaction(async (tx) => {
-    const [row] = await tx.update(actionsTable).set(updates).where(eq(actionsTable.id, id.data)).returning();
+    const [row] = await tx.update(actionsTable).set(updates).where(updateCondition).returning();
+    if (!row) return undefined;
     if (changes.length) await tx.insert(auditEventsTable).values(changes.map(([fieldName, value]) => ({
       propertyId: user.propertyId!, actionId: id.data, observationId: row.observationId, userId: user.id,
       eventType: "action_edited", fieldName, previousValue: String(existing[fieldName as keyof typeof existing] ?? ""),
@@ -378,6 +384,16 @@ router.patch("/:id", requireAuth, requireRole("administrator", "manager"), async
     })));
     return row;
   });
+  if (!updated) {
+    // Lost the race between our read and the conditional update.
+    const [current] = await db.select().from(actionsTable).where(and(eq(actionsTable.id, id.data),
+      eq(actionsTable.propertyId, user.propertyId!), isNull(actionsTable.deletedAt))).limit(1);
+    if (!current) return void res.status(404).json({ error: "Action not found" });
+    return void res.status(409).json({
+      error: "This task was changed by someone else while you were editing. Reload to see the latest version, then reapply your changes.",
+      code: "edit_conflict", currentUpdatedAt: current.updatedAt.toISOString(),
+    });
+  }
   const [full] = await baseSelect().where(eq(actionsTable.id, updated.id)).limit(1);
   res.json(full);
 });

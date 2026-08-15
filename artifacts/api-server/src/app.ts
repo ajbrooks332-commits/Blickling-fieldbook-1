@@ -45,9 +45,9 @@ app.use(helmet({
   referrerPolicy: { policy: "no-referrer" },
 }));
 
-// Permissions Policy: geolocation is required (field recording); camera is
-// used via file input capture (which does not need the camera permission),
-// everything else is denied.
+// Permissions Policy: geolocation is limited to same origin (field recording);
+// camera/microphone/payment/usb are explicitly denied (file-input capture does
+// not need the camera permission). Features not listed keep browser defaults.
 app.use((_req, res, next) => {
   res.setHeader("Permissions-Policy", "geolocation=(self), camera=(), microphone=(), payment=(), usb=()");
   next();

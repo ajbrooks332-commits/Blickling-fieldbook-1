@@ -369,6 +369,12 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       const freshEdit = await mutate(`/api/observations/${observation.id}`, "PATCH",
         { title: "Fresh edit", expectedUpdatedAt: new Date(currentObsBody.updatedAt).toISOString() });
       assert.equal(freshEdit.status, 200);
+      // Replaying the same (now consumed) token must lose the compare-and-swap.
+      const replayEdit = await mutate(`/api/observations/${observation.id}`, "PATCH",
+        { title: "Replay edit", expectedUpdatedAt: new Date(currentObsBody.updatedAt).toISOString() });
+      assert.equal(replayEdit.status, 409);
+      const replayBody = await replayEdit.json() as { code: string; currentUpdatedAt: string };
+      assert.equal(replayBody.code, "edit_conflict");
 
       // Re-archive so later reference-data assertions see the original state.
       const rearchiveAct = await mutate(`/api/actions/${action.id}`, "DELETE");
