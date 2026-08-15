@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { and, asc, count, eq, ne, sql } from "drizzle-orm";
 import { z } from "zod";
-import { db, usersTable } from "@workspace/db";
+import { auditEventsTable, db, usersTable } from "@workspace/db";
 import { requireAuth, requireRole } from "../lib/auth";
 import { idSchema, isPostgresError, shortText, strongPassword, validationError } from "../lib/validation";
 
@@ -61,6 +61,8 @@ router.post("/users", requireAuth, requireRole("administrator"), async (req, res
     throw error;
   });
   if (!row) return void res.status(409).json({ error: "A user with this email already exists" });
+  await db.insert(auditEventsTable).values({ propertyId: req.authUser!.propertyId!, userId: req.authUser!.id,
+    eventType: "user_created", newValue: `${parsed.data.name} (${parsed.data.role})` }).catch(() => undefined);
   res.status(201).json(row);
 });
 
@@ -119,6 +121,12 @@ router.patch("/users/:id", requireAuth, requireRole("administrator"), async (req
   if (result.kind === "last_admin") return void res.status(409).json({ error: "The final active administrator cannot be disabled or demoted" });
   if (result.kind === "duplicate") return void res.status(409).json({ error: "A user with this email already exists" });
   const { row } = result;
+  // Audit which fields changed (names only — never values for credentials).
+  const changedFields = Object.keys(parsed.data);
+  await db.insert(auditEventsTable).values({ propertyId, userId: req.authUser!.id,
+    eventType: "user_updated", fieldName: changedFields.join(","),
+    metadata: { targetUserId: id.data, sessionsRevoked: changedFields.some((f) => ["password", "email", "role", "active"].includes(f)) },
+  }).catch(() => undefined);
   res.json(row);
 });
 

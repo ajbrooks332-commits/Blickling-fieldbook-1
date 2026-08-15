@@ -2,7 +2,7 @@ import { timingSafeEqual } from "crypto";
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { db, appSettingsTable, categoriesTable, namedLocationsTable, propertiesTable, usersTable } from "@workspace/db";
+import { db, appSettingsTable, auditEventsTable, categoriesTable, namedLocationsTable, propertiesTable, usersTable } from "@workspace/db";
 import { eq, sql } from "drizzle-orm";
 import { rateLimit } from "express-rate-limit";
 import { requireAuth } from "../lib/auth";
@@ -179,6 +179,12 @@ router.post("/login", loginLimiter, async (req, res) => {
   const [user] = await db.select().from(usersTable).where(eq(usersTable.email, parsed.data.email)).limit(1);
   const valid = user ? await bcrypt.compare(parsed.data.password, user.passwordHash) : false;
   if (!user || !valid || !user.active || !user.propertyId) {
+    // Audit authentication failures. Never record the password; the metadata
+    // distinguishes unknown account vs bad password vs deactivated account.
+    await db.insert(auditEventsTable).values({
+      propertyId: user?.propertyId ?? null, userId: user?.id ?? null, eventType: "auth_failure",
+      metadata: { reason: !user ? "unknown_email" : !valid ? "bad_password" : "inactive_account" },
+    }).catch(() => undefined);
     res.status(401).json({ error: "Invalid email or password" });
     return;
   }
@@ -193,6 +199,8 @@ router.post("/login", loginLimiter, async (req, res) => {
     req.session.userRole = user.role;
     req.session.propertyId = user.propertyId;
     req.session.sessionVersion = user.sessionVersion;
+    void db.insert(auditEventsTable).values({ propertyId: user.propertyId, userId: user.id, eventType: "auth_login" })
+      .catch(() => undefined);
     res.json(publicUser(user));
   });
 });
@@ -224,6 +232,8 @@ router.post("/change-password", requireAuth, async (req, res) => {
     updatedAt: new Date(),
   }).where(eq(usersTable.id, user.id)).returning();
   await db.execute(sql`DELETE FROM session WHERE sess->>'userId' = ${String(user.id)}`);
+  await db.insert(auditEventsTable).values({ propertyId: user.propertyId, userId: user.id,
+    eventType: "password_changed", metadata: { sessionsRevoked: true } }).catch(() => undefined);
   req.session.regenerate((error) => {
     if (error) return void res.status(500).json({ error: "Password changed, but a new session could not be created. Sign in again." });
     req.session.userId = updated.id;

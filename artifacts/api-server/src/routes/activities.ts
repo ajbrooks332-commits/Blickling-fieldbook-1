@@ -403,6 +403,8 @@ router.post("/activities", requireAuth, async (req, res) => {
     }
     return row;
   });
+  await db.insert(auditEventsTable).values({ propertyId, userId: req.authUser!.id,
+    eventType: "activity_created", metadata: { activityLogId: created.id } }).catch(() => undefined);
   res.status(201).json({ id: created.id });
 });
 
@@ -420,6 +422,8 @@ router.delete("/activities/:id", requireAuth, async (req, res) => {
   await db.update(activityLogsTable)
     .set({ deletedAt: new Date(), deletedByUserId: user.id })
     .where(eq(activityLogsTable.id, id.data));
+  await db.insert(auditEventsTable).values({ propertyId, userId: user.id,
+    eventType: "activity_archived", metadata: { activityLogId: id.data } }).catch(() => undefined);
   res.status(204).end();
 });
 
