@@ -3,9 +3,9 @@ import { and, asc, desc, eq, gte, inArray, isNull, lte, sql } from "drizzle-orm"
 import { z } from "zod";
 import {
   db, activityTypesTable, activityLogsTable, activityLogParticipantsTable,
-  activityLogLocationsTable, namedLocationsTable, usersTable,
+  activityLogLocationsTable, auditEventsTable, namedLocationsTable, usersTable,
 } from "@workspace/db";
-import { requireAuth } from "../lib/auth";
+import { requireAuth, requireRole } from "../lib/auth";
 import { idSchema, optionalText, shortText, validationError } from "../lib/validation";
 
 const router = Router();
@@ -110,11 +110,16 @@ router.get("/activity-types", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
-// Any signed-in user may add a custom activity type (typed in from the quick-add form).
+// Creation of canonical activity types is manager-led. Field convenience is
+// preserved: a non-manager quick-add still succeeds but is flagged as a
+// PROPOSAL for manager review. Archived types are never silently reactivated —
+// reactivation is an explicit manager action on a separate endpoint.
 router.post("/activity-types", requireAuth, async (req, res) => {
   const parsed = z.object({ name: shortText, category: shortText.optional() }).strict().safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error);
-  const propertyId = req.authUser!.propertyId!;
+  const user = req.authUser!;
+  const propertyId = user.propertyId!;
+  const manager = user.role === "administrator" || user.role === "manager";
   const name = parsed.data.name.trim();
   if (!name) return void res.status(400).json({ error: "Activity name is required" });
   const findExisting = async () => {
@@ -129,20 +134,54 @@ router.post("/activity-types", requireAuth, async (req, res) => {
     // Case-insensitive uniqueness is enforced by a DB index; ON CONFLICT DO NOTHING
     // makes concurrent same-name requests safe — the loser falls through to reuse.
     const [inserted] = await db.insert(activityTypesTable)
-      .values({ propertyId, name, category: parsed.data.category?.trim() || "Other", sortOrder: Number(max) + 1 })
+      .values({ propertyId, name, category: parsed.data.category?.trim() || "Other", sortOrder: Number(max) + 1, proposed: !manager })
       .onConflictDoNothing().returning();
-    if (inserted) return void res.status(201).json(inserted);
+    if (inserted) {
+      await db.insert(auditEventsTable).values({ propertyId, userId: user.id,
+        eventType: manager ? "activity_type_created" : "activity_type_proposed", newValue: name });
+      return void res.status(201).json(inserted);
+    }
     existing = await findExisting();
     if (!existing) return void res.status(500).json({ error: "Could not create activity type" });
   }
-  // Reuse (and reactivate) an existing type of the same name instead of rejecting —
-  // the quick-add flow just needs a usable type back.
   if (!existing.active) {
-    const [reactivated] = await db.update(activityTypesTable).set({ active: true })
-      .where(eq(activityTypesTable.id, existing.id)).returning();
-    return void res.status(200).json(reactivated);
+    // Never silently reactivate archived reference data.
+    return void res.status(409).json({
+      error: manager
+        ? "An archived activity type with this name exists. Reactivate it explicitly instead."
+        : "An archived activity type with this name exists. Ask a manager to reactivate it.",
+      archivedId: existing.id,
+    });
   }
   res.status(200).json(existing);
+});
+
+// Explicit manager-only reactivation of an archived activity type.
+router.post("/activity-types/:id/reactivate", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const user = req.authUser!;
+  const [row] = await db.update(activityTypesTable).set({ active: true, proposed: false })
+    .where(and(eq(activityTypesTable.id, id.data), eq(activityTypesTable.propertyId, user.propertyId!),
+      eq(activityTypesTable.active, false))).returning();
+  if (!row) return void res.status(404).json({ error: "Archived activity type not found" });
+  await db.insert(auditEventsTable).values({ propertyId: user.propertyId!, userId: user.id,
+    eventType: "activity_type_reactivated", newValue: row.name });
+  res.json(row);
+});
+
+// Manager approval of a proposed (non-manager quick-added) activity type.
+router.post("/activity-types/:id/approve", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const user = req.authUser!;
+  const [row] = await db.update(activityTypesTable).set({ proposed: false })
+    .where(and(eq(activityTypesTable.id, id.data), eq(activityTypesTable.propertyId, user.propertyId!),
+      eq(activityTypesTable.proposed, true))).returning();
+  if (!row) return void res.status(404).json({ error: "Proposed activity type not found" });
+  await db.insert(auditEventsTable).values({ propertyId: user.propertyId!, userId: user.id,
+    eventType: "activity_type_approved", newValue: row.name });
+  res.json(row);
 });
 
 async function loadParticipants(activityLogIds: number[]) {

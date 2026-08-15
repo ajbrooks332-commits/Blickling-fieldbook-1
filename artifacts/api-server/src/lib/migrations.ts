@@ -409,6 +409,10 @@ const statements = [
   `ALTER TABLE observation_images ADD COLUMN IF NOT EXISTS deleted_by_user_id integer REFERENCES users(id)`,
   `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS deleted_at timestamp`,
   `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS deleted_by_user_id integer REFERENCES users(id)`,
+  // Proposal flow for reference data: non-manager quick-adds are flagged as
+  // proposals for a manager to review; managers create canonical rows directly.
+  `ALTER TABLE activity_types ADD COLUMN IF NOT EXISTS proposed boolean NOT NULL DEFAULT false`,
+  `ALTER TABLE named_locations ADD COLUMN IF NOT EXISTS proposed boolean NOT NULL DEFAULT false`,
 ];
 
 export async function runMigrations(): Promise<void> {

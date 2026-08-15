@@ -10,6 +10,8 @@ export const activityTypesTable = pgTable("activity_types", {
   category: text("category"),
   sortOrder: integer("sort_order").notNull().default(0),
   active: boolean("active").notNull().default(true),
+  // Quick-added by a non-manager, awaiting manager review.
+  proposed: boolean("proposed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

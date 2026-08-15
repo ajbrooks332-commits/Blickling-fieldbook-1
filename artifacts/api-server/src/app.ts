@@ -45,8 +45,23 @@ app.use(helmet({
   referrerPolicy: { policy: "no-referrer" },
 }));
 
-if (process.env.APP_ORIGIN) {
-  app.use(cors({ origin: process.env.APP_ORIGIN, credentials: true }));
+// APP_ORIGIN is mandatory in production: same-origin checks must compare
+// against an explicit, operator-set origin, never a host-derived fallback.
+const appOrigin = process.env.APP_ORIGIN;
+if (process.env.NODE_ENV === "production") {
+  const valid = (() => {
+    if (!appOrigin) return false;
+    try {
+      const parsed = new URL(appOrigin);
+      return (parsed.protocol === "https:" || parsed.protocol === "http:") && parsed.origin === appOrigin;
+    } catch { return false; }
+  })();
+  if (!valid) {
+    throw new Error("APP_ORIGIN must be set in production to the app's exact public origin (e.g. https://fieldbook.example.org — scheme + host, no path or trailing slash)");
+  }
+}
+if (appOrigin) {
+  app.use(cors({ origin: appOrigin, credentials: true }));
 }
 
 app.use(express.json({ limit: "1mb" }));

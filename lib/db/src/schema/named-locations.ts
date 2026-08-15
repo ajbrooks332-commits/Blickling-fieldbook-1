@@ -11,6 +11,8 @@ export const namedLocationsTable = pgTable("named_locations", {
   latitude: real("latitude"),
   longitude: real("longitude"),
   active: boolean("active").notNull().default(true),
+  // Quick-added by a non-manager, awaiting manager review.
+  proposed: boolean("proposed").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
