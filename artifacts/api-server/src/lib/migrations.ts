@@ -1,6 +1,12 @@
+import { createHash } from "node:crypto";
 import { pool } from "@workspace/db";
 import { logger } from "./logger";
 
+// Ordered migration ledger. Each entry is applied exactly once and its
+// checksum is recorded in schema_migrations. NEVER edit or reorder an entry
+// after it has shipped — append a new one instead; startup fails loudly on a
+// checksum mismatch. (Entries remain individually idempotent, which lets an
+// existing pre-ledger database baseline itself safely on first ledger run.)
 const statements = [
   `DO $$ BEGIN
     CREATE TYPE user_role AS ENUM ('administrator', 'manager', 'team_member');
@@ -415,14 +421,45 @@ const statements = [
   `ALTER TABLE named_locations ADD COLUMN IF NOT EXISTS proposed boolean NOT NULL DEFAULT false`,
 ];
 
+const checksum = (statement: string) => createHash("sha256").update(statement).digest("hex");
+
 export async function runMigrations(): Promise<void> {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
+    // Serialises concurrent startups: the first process migrates, the rest
+    // wait on the lock and then see an up-to-date ledger.
     await client.query("SELECT pg_advisory_xact_lock(42424242)");
-    for (const statement of statements) await client.query(statement);
+    await client.query(`CREATE TABLE IF NOT EXISTS schema_migrations (
+      version integer PRIMARY KEY,
+      checksum text NOT NULL,
+      applied_at timestamp NOT NULL DEFAULT now()
+    )`);
+    const { rows } = await client.query<{ version: number; checksum: string }>(
+      "SELECT version, checksum FROM schema_migrations ORDER BY version",
+    );
+    // Verify the ledger: an edited or reordered historical entry is a
+    // deployment error, not something to silently re-run.
+    for (const applied of rows) {
+      const statement = statements[applied.version - 1];
+      if (statement === undefined || checksum(statement) !== applied.checksum) {
+        throw new Error(
+          `Migration ledger mismatch at version ${applied.version}: a previously applied migration was modified or removed. Append new migrations instead of editing history.`,
+        );
+      }
+    }
+    const startFrom = rows.length; // versions are contiguous 1..N
+    let appliedNow = 0;
+    for (let index = startFrom; index < statements.length; index += 1) {
+      await client.query(statements[index]);
+      await client.query(
+        "INSERT INTO schema_migrations (version, checksum) VALUES ($1, $2)",
+        [index + 1, checksum(statements[index])],
+      );
+      appliedNow += 1;
+    }
     await client.query("COMMIT");
-    logger.info({ migrations: statements.length }, "Database migrations applied");
+    logger.info({ total: statements.length, applied: appliedNow }, "Database migrations applied");
   } catch (error) {
     await client.query("ROLLBACK");
     logger.error({ err: error }, "Database migration failed");
@@ -431,3 +468,6 @@ export async function runMigrations(): Promise<void> {
     client.release();
   }
 }
+
+// Exposed for migration tests (pre-change fixture + tamper detection).
+export const migrationLedger = { statements, checksum };

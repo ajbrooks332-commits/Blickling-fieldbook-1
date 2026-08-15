@@ -376,6 +376,29 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     }
+
+    // --- Migration ledger ---
+    const { migrationLedger } = await import("./migrations");
+    const ledger = await pool.query<{ version: number; checksum: string }>(
+      "SELECT version, checksum FROM schema_migrations ORDER BY version");
+    assert.equal(ledger.rowCount, migrationLedger.statements.length);
+    assert.equal(ledger.rows[0].checksum, migrationLedger.checksum(migrationLedger.statements[0]));
+
+    // Tampered history must fail loudly, not silently re-run.
+    await pool.query("UPDATE schema_migrations SET checksum = 'tampered' WHERE version = 1");
+    await assert.rejects(runMigrations(), /ledger mismatch at version 1/);
+    await pool.query("UPDATE schema_migrations SET checksum = $1 WHERE version = 1",
+      [migrationLedger.checksum(migrationLedger.statements[0])]);
+
+    // Pre-ledger database (schema + data exist, no schema_migrations): the
+    // baseline run must record the full ledger and preserve live data.
+    const before = await pool.query<{ n: string }>("SELECT count(*)::text AS n FROM users");
+    await pool.query("DROP TABLE schema_migrations");
+    await runMigrations();
+    const rebaselined = await pool.query("SELECT count(*)::int AS n FROM schema_migrations");
+    assert.equal(rebaselined.rows[0].n, migrationLedger.statements.length);
+    const after = await pool.query<{ n: string }>("SELECT count(*)::text AS n FROM users");
+    assert.equal(after.rows[0].n, before.rows[0].n);
   } finally {
     await pool.end();
   }
