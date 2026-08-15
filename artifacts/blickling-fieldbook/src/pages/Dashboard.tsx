@@ -17,8 +17,8 @@ const C = {
   border: "#30363d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
   urgent: "#f85149",
@@ -175,7 +175,7 @@ export default function Dashboard() {
           <div
             key={i}
             className="w-2 h-2 rounded-full animate-bounce"
-            style={{ background: C.emerald, animationDelay: `${i * 120}ms` }}
+            style={{ background: C.emeraldBtn, animationDelay: `${i * 120}ms` }}
           />
         ))}
       </div>

@@ -27,8 +27,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
@@ -276,7 +276,7 @@ export default function ObservationNew() {
               type="button"
               onClick={() => setLocation(`/actions/new?observationId=${savedObs.id}`)}
               style={{
-                width: "100%", padding: "12px", background: C.emerald, border: "none", borderRadius: "0.625rem",
+                width: "100%", padding: "12px", background: C.emeraldBtn, border: "none", borderRadius: "0.625rem",
                 cursor: "pointer", ...HEAD, fontSize: 15, fontWeight: 700, color: "#04150e",
               }}
             >

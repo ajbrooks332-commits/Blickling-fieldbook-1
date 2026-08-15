@@ -17,8 +17,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
@@ -189,7 +189,7 @@ export default function ActionDetail() {
     return (
       <div className="flex justify-center items-center gap-1 p-12">
         {[0, 150, 300].map(delay => (
-          <div key={delay} className="animate-bounce w-2 h-2 rounded-full" style={{ background: C.emerald, animationDelay: `${delay}ms` }} />
+          <div key={delay} className="animate-bounce w-2 h-2 rounded-full" style={{ background: C.emeraldBtn, animationDelay: `${delay}ms` }} />
         ))}
       </div>
     )
@@ -579,7 +579,7 @@ export default function ActionDetail() {
                 <button
                   onClick={() => promptStatusChange('in_progress')}
                   className="w-full flex items-center gap-2 justify-center transition-colors"
-                  style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: "#fff", background: C.emerald, border: "none", borderRadius: "0.625rem", padding: "10px 16px", cursor: "pointer" }}
+                  style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: "#fff", background: C.emeraldBtn, border: "none", borderRadius: "0.625rem", padding: "10px 16px", cursor: "pointer" }}
                   onMouseEnter={e => (e.currentTarget.style.background = C.emeraldDark)}
                   onMouseLeave={e => (e.currentTarget.style.background = C.emerald)}
                 >
@@ -591,7 +591,7 @@ export default function ActionDetail() {
                   <button
                     onClick={() => promptStatusChange('completed')}
                     className="w-full flex items-center gap-2 justify-center transition-colors"
-                    style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: "#fff", background: C.emerald, border: "none", borderRadius: "0.625rem", padding: "10px 16px", cursor: "pointer" }}
+                    style={{ ...HEAD, fontSize: 13, fontWeight: 600, color: "#fff", background: C.emeraldBtn, border: "none", borderRadius: "0.625rem", padding: "10px 16px", cursor: "pointer" }}
                     onMouseEnter={e => (e.currentTarget.style.background = C.emeraldDark)}
                     onMouseLeave={e => (e.currentTarget.style.background = C.emerald)}
                   >
@@ -640,7 +640,7 @@ export default function ActionDetail() {
                 <div className="absolute left-[5px] top-0 bottom-0 w-px" style={{ background: `linear-gradient(to bottom, transparent, ${C.border}, transparent)` }} />
                 {act.auditEvents.map(evt => (
                   <div key={evt.id} className="relative flex items-start gap-3 pl-4">
-                    <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: C.emerald, border: `2px solid ${C.surface}`, outline: `2px solid ${C.emeraldDim}` }} />
+                    <div className="absolute left-0 top-1.5 w-2.5 h-2.5 rounded-full" style={{ background: C.emeraldBtn, border: `2px solid ${C.surface}`, outline: `2px solid ${C.emeraldDim}` }} />
                     <div>
                       <div style={{ ...BODY, fontSize: 12, color: C.text }}>
                         {evt.eventType === 'status_changed' ? (

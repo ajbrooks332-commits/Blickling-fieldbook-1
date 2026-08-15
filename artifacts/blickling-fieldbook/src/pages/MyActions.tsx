@@ -15,8 +15,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
@@ -90,7 +90,7 @@ export default function MyActions() {
     return (
       <div className="flex justify-center items-center gap-1 p-12">
         {[0, 150, 300].map(delay => (
-          <div key={delay} className="animate-bounce w-2 h-2 rounded-full" style={{ background: C.emerald, animationDelay: `${delay}ms` }} />
+          <div key={delay} className="animate-bounce w-2 h-2 rounded-full" style={{ background: C.emeraldBtn, animationDelay: `${delay}ms` }} />
         ))}
       </div>
     )
@@ -315,7 +315,7 @@ export default function MyActions() {
                           fontSize: 12,
                           fontWeight: 600,
                           color: "#fff",
-                          background: C.emerald,
+                          background: C.emeraldBtn,
                           border: "none",
                           borderRadius: "0.5rem",
                           padding: "6px 10px",

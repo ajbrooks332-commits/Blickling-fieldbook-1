@@ -26,8 +26,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
 }
 
@@ -631,7 +631,7 @@ export default function MapView() {
               {active && (
                 <span
                   className="w-2 h-2 rounded-full inline-block"
-                  style={{ background: C.emerald }}
+                  style={{ background: C.emeraldBtn }}
                 />
               )}
             </button>
@@ -769,7 +769,7 @@ export default function MapView() {
               <button
                 onClick={() => setDrawerOpen(false)}
                 className="w-full py-2.5 rounded-lg text-sm font-medium"
-                style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD, cursor: "pointer" }}
+                style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD, cursor: "pointer" }}
               >
                 Apply Filters
               </button>

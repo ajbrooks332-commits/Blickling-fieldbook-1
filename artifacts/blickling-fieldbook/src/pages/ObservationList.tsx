@@ -11,8 +11,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
@@ -154,9 +154,9 @@ export default function ObservationList() {
       {/* Loading */}
       {loadError ? <div role="alert" className="rounded-md border border-destructive/30 p-4">Observations could not be loaded.</div> : isLoading ? (
         <div className="flex justify-center items-center p-12 gap-2">
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "150ms" }} />
-          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "300ms" }} />
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "0ms" }} />
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "150ms" }} />
+          <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "300ms" }} />
         </div>
       ) : listData?.observations.length === 0 ? (
         /* Empty state */

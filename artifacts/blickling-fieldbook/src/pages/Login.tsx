@@ -15,8 +15,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   urgent: "#f85149",
@@ -90,7 +90,7 @@ export default function Login() {
               className="w-14 h-14 rounded-2xl flex items-center justify-center"
               style={{ background: C.emeraldDim, border: `1px solid rgba(16,185,129,0.3)` }}
             >
-              <div className="w-6 h-6 rounded-md" style={{ background: C.emerald }} />
+              <div className="w-6 h-6 rounded-md" style={{ background: C.emeraldBtn }} />
             </div>
             {/* Glow ring */}
             <div
@@ -182,7 +182,7 @@ export default function Login() {
               disabled={login.isPending}
               className="w-full h-12 rounded-xl text-sm font-semibold flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
               style={{
-                background: C.emerald,
+                background: C.emeraldBtn,
                 color: "#fff",
                 fontFamily: "'Space Grotesk', sans-serif",
                 boxShadow: `0 4px 20px rgba(16,185,129,0.3)`,

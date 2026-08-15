@@ -10,8 +10,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   urgent: "#f85149",
@@ -117,7 +117,7 @@ export default function Reports() {
             onClick={handleExport}
             disabled={exporting}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-            style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD }}
+            style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD }}
             onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
             onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
           >
@@ -127,7 +127,7 @@ export default function Reports() {
             onClick={handleExcelExport}
             disabled={exportingXlsx}
             className="flex items-center gap-2 px-3 py-2 rounded-lg text-sm"
-            style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD }}
+            style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD }}
             onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
             onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
           >
@@ -146,6 +146,7 @@ export default function Reports() {
         <div className="flex items-center gap-2 w-full sm:w-auto">
           <input
             type="date"
+            aria-label="Report start date"
             value={dateFrom}
             onChange={e => setDateFrom(e.target.value)}
             style={{
@@ -159,6 +160,7 @@ export default function Reports() {
           <span style={{ color: C.muted, fontSize: 13 }}>to</span>
           <input
             type="date"
+            aria-label="Report end date"
             value={dateTo}
             onChange={e => setDateTo(e.target.value)}
             style={{

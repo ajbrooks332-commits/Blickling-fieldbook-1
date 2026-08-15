@@ -14,8 +14,8 @@ const C = {
   border: "#30363d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldTint: "rgba(16,185,129,0.08)",
   blue: "#58a6ff",
   blueTint: "rgba(88,166,255,0.12)",
@@ -585,7 +585,7 @@ export default function Activities() {
           <div>
             <label style={labelStyle}>Date</label>
             <input
-              type="date" value={activityDate} max={todayISO()}
+              type="date" aria-label="Activity date" value={activityDate} max={todayISO()}
               onChange={e => setActivityDate(e.target.value)}
               style={{ ...inputStyle, colorScheme: "dark" }}
             />
@@ -608,7 +608,7 @@ export default function Activities() {
           style={{
             width: "100%", padding: "12px", background: canSave ? C.emerald : C.border, border: "none",
             borderRadius: "0.625rem", cursor: canSave ? "pointer" : "not-allowed", ...HEAD,
-            fontSize: 15, fontWeight: 700, color: canSave ? "#04150e" : C.dim,
+            fontSize: 15, fontWeight: 700, color: canSave ? "#04150e" : "#a3adb8",
             display: "flex", alignItems: "center", justifyContent: "center", gap: 8,
           }}
         >

@@ -1,0 +1,15 @@
+{
+  "cookies": [
+    {
+      "name": "blickling.sid",
+      "value": "s%3AA1wzObc0H92-Xg9eRrdhggh1KoRN7-pY.VabKl4fG8b6jnYNNZVBv3igdkLF1DDxIfIVrtGNPKhk",
+      "domain": "localhost",
+      "path": "/",
+      "expires": 1786845335,
+      "httpOnly": true,
+      "secure": false,
+      "sameSite": "Lax"
+    }
+  ],
+  "origins": []
+}

@@ -17,8 +17,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldDim: "#065f46",
   emeraldTint: "rgba(16,185,129,0.08)",
@@ -217,9 +217,9 @@ export default function ObservationDetail() {
   if (isLoading) {
     return (
       <div className="flex justify-center items-center p-12 gap-2">
-        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
-        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "150ms" }} />
-        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "300ms" }} />
+        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "0ms" }} />
+        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "150ms" }} />
+        <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "300ms" }} />
       </div>
     )
   }
@@ -416,7 +416,7 @@ export default function ObservationDetail() {
             onClick={() => setLocation(`/actions/new?observationId=${id}`)}
             className="flex items-center gap-1.5"
             style={{
-              background: C.emerald,
+              background: C.emeraldBtn,
               border: "none",
               borderRadius: "0.5rem",
               color: "#fff",
@@ -619,9 +619,9 @@ export default function ObservationDetail() {
               {photoError && <p role="alert" className="text-sm text-red-400">{photoError}</p>}
               {imagesLoading ? (
                 <div className="flex justify-center items-center py-4 gap-2">
-                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "0ms" }} />
-                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "150ms" }} />
-                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emerald, animationDelay: "300ms" }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "0ms" }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "150ms" }} />
+                  <span className="w-2 h-2 rounded-full animate-bounce" style={{ background: C.emeraldBtn, animationDelay: "300ms" }} />
                 </div>
               ) : (
                 <PhotoGallery images={images} onDelete={handleDeleteImage} editable canDelete={(image) => Boolean(isManager || image.uploadedByUserId === me?.id)} />

@@ -15,8 +15,8 @@ const C = {
   borderMid: "#21262d",
   text: "#e6edf3",
   muted: "#8b949e",
-  dim: "#484f58",
-  emerald: "#10b981",
+  dim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDark: "#0d9268",
   emeraldTint: "rgba(16,185,129,0.08)",
 }
@@ -133,7 +133,7 @@ export default function Categories() {
         <button
           onClick={() => setCreateOpen(v => !v)}
           className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm"
-          style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD, fontWeight: 600, cursor: "pointer" }}
+          style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD, fontWeight: 600, cursor: "pointer" }}
           onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.background = C.emeraldDark}
           onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.background = C.emerald}
         >
@@ -216,7 +216,7 @@ export default function Categories() {
               type="submit"
               disabled={createCategory.isPending}
               className="px-4 py-1.5 rounded-lg text-sm"
-              style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD, cursor: "pointer", opacity: createCategory.isPending ? 0.6 : 1 }}
+              style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD, cursor: "pointer", opacity: createCategory.isPending ? 0.6 : 1 }}
             >
               {createCategory.isPending ? "Saving…" : "Save Category"}
             </button>
@@ -290,7 +290,7 @@ export default function Categories() {
                       onClick={() => handleUpdate(cat.id)}
                       disabled={updateCategory.isPending}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-                      style={{ background: C.emerald, color: "#fff", border: "none", ...HEAD, cursor: "pointer" }}
+                      style={{ background: C.emeraldBtn, color: "#fff", border: "none", ...HEAD, cursor: "pointer" }}
                     >
                       <Check className="w-3.5 h-3.5" /> Save
                     </button>

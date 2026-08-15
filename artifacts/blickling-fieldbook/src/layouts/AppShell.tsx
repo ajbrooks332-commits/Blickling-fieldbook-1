@@ -32,8 +32,8 @@ const C = {
   borderMid: "#30363d",
   text: "#e6edf3",
   textMuted: "#8b949e",
-  textDim: "#484f58",
-  emerald: "#10b981",
+  textDim: "#7d8590",
+  emerald: "#10b981", emeraldBtn: "#047857",
   emeraldDim: "#065f46",
 }
 
@@ -201,7 +201,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
         <div className="flex items-center gap-3 px-5 py-5" style={{ borderBottom: `1px solid ${C.border}` }}>
           <div className="flex items-center justify-center w-8 h-8 rounded-lg flex-shrink-0"
                style={{ background: C.emeraldDim }}>
-            <div className="w-3.5 h-3.5 rounded-sm" style={{ background: C.emerald }} />
+            <div className="w-3.5 h-3.5 rounded-sm" style={{ background: C.emeraldBtn }} />
           </div>
           <div>
             <div className="text-sm font-semibold leading-tight tracking-tight"
@@ -224,7 +224,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
         <div className="px-3 py-4 space-y-1" style={{ borderTop: `1px solid ${C.border}` }}>
           <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1">
             <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
-                 style={{ background: C.emeraldDim, color: C.emerald }}>
+                 style={{ background: C.emeraldDim, color: "#a7f3d0" }}>
               {user.name?.split(" ").map(n => n[0]).slice(0, 2).join("").toUpperCase() || "?"}
             </div>
             <div className="min-w-0 flex-1">
@@ -256,7 +256,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
              "Blickling Fieldbook"}
           </div>
           <button type="button" onClick={openCreate} className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold transition-opacity hover:opacity-90"
-            style={{ background: C.emerald, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>
+            style={{ background: C.emeraldBtn, color: "#fff", fontFamily: "'Space Grotesk', sans-serif" }}>
             <Plus className="h-4 w-4" /> New
           </button>
         </header>
@@ -282,7 +282,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
             if (special) {
               return (
                 <button key={label} type="button" onClick={openCreate} aria-label="Record something new" aria-expanded={createOpen} className="flex flex-col items-center justify-center -translate-y-4">
-                  <span className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg" style={{ background: C.emerald }}>
+                  <span className="w-12 h-12 rounded-full flex items-center justify-center shadow-lg" style={{ background: C.emeraldBtn }}>
                     <Icon className="h-5 w-5" style={{ color: "#fff" }} />
                   </span>
                 </button>
@@ -301,7 +301,7 @@ export default function AppShell({ children, user }: { children: React.ReactNode
                   {active && (
                     <span
                       className="absolute -top-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full"
-                      style={{ background: C.emerald }}
+                      style={{ background: C.emeraldBtn }}
                     />
                   )}
                   <Icon
@@ -435,7 +435,7 @@ function NavSection({ label, items, location, isActive }: {
     <div>
       <div
         className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-2"
-        style={{ color: "#484f58", fontFamily: "'Space Grotesk', sans-serif" }}
+        style={{ color: "#7d8590", fontFamily: "'Space Grotesk', sans-serif" }}
       >
         {label}
       </div>
@@ -475,7 +475,7 @@ function DrawerSection({ label, children }: { label: string; children: React.Rea
   return (
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-widest px-1 mb-2"
-           style={{ color: "#484f58", fontFamily: "'Space Grotesk', sans-serif" }}>
+           style={{ color: "#7d8590", fontFamily: "'Space Grotesk', sans-serif" }}>
         {label}
       </div>
       <div className="space-y-1">{children}</div>
@@ -496,7 +496,7 @@ function DrawerItem({ icon: Icon, label, onClick }: { icon: React.ElementType; l
         <Icon className="h-4 w-4" style={{ color: "#8b949e" }} />
       </div>
       <span className="flex-1">{label}</span>
-      <ChevronRight className="h-4 w-4" style={{ color: "#484f58" }} />
+      <ChevronRight className="h-4 w-4" style={{ color: "#7d8590" }} />
     </button>
   )
 }
