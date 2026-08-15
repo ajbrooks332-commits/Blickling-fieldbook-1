@@ -16,6 +16,8 @@ import { useLocation } from "wouter"
 import { useListCategories, useListLocations } from "@workspace/api-client-react"
 import { Crosshair, X, MapPin, SlidersHorizontal } from "lucide-react"
 import { apiFetch } from "@/lib/api"
+import { getOfflineAccount } from "@/lib/offlineFallback"
+import { readOfflineCollection } from "@/lib/offlineStore"
 
 const C = {
   bg: "#0d1117",
@@ -363,6 +365,9 @@ export default function MapView() {
   const [totalTaskMarkers, setTotalTaskMarkers] = useState(0)
   const [showObservations, setShowObservations] = useState(true)
   const [showTasks, setShowTasks] = useState(true)
+  // Offline fallback: map tiles cannot be bulk-downloaded in advance under
+  // the OpenStreetMap tile policy, so offline we show cached records as a list.
+  const [offlineRows, setOfflineRows] = useState<Array<{ kind: "observation" | "task"; id: number; referenceNumber: string; title: string; priority: string; locationName: string | null }> | null>(null)
 
   const { data: categories = [] } = useListCategories()
   const { data: locations = [] } = useListLocations()
@@ -442,6 +447,41 @@ export default function MapView() {
     await Promise.all([loadObservations(), loadTasks()])
     if (requestRef.current === controller) setLoading(false)
   }, [filters])
+
+  // When offline, build a cached-records list from the structured offline
+  // store so field staff can still find records without the map.
+  useEffect(() => {
+    if (navigator.onLine) { setOfflineRows(null); return }
+    const account = getOfflineAccount()
+    if (!account) return
+    let cancelled = false
+    const load = async () => {
+      const [observations, actions, locations] = await Promise.all([
+        readOfflineCollection<Record<string, unknown>>(account.userId, account.propertyId, "observations"),
+        readOfflineCollection<Record<string, unknown>>(account.userId, account.propertyId, "actions"),
+        readOfflineCollection<Record<string, unknown>>(account.userId, account.propertyId, "locations"),
+      ])
+      if (cancelled) return
+      const locationName = new Map(locations.map((l) => [l.id as number, l.name as string]))
+      const rows = [
+        ...observations.filter((o) => o.status !== "closed").map((o) => ({
+          kind: "observation" as const, id: o.id as number, referenceNumber: String(o.referenceNumber ?? ""),
+          title: String(o.title ?? ""), priority: String(o.priority ?? "normal"),
+          locationName: o.namedLocationId != null ? locationName.get(o.namedLocationId as number) ?? null : null,
+        })),
+        ...actions.filter((a) => a.status !== "completed" && a.status !== "cancelled").map((a) => ({
+          kind: "task" as const, id: a.id as number, referenceNumber: String(a.referenceNumber ?? ""),
+          title: String(a.title ?? ""), priority: String(a.priority ?? "normal"),
+          locationName: a.namedLocationId != null ? locationName.get(a.namedLocationId as number) ?? null : null,
+        })),
+      ]
+      setOfflineRows(rows)
+    }
+    load().catch(() => setOfflineRows([]))
+    const onOnline = () => setOfflineRows(null)
+    window.addEventListener("online", onOnline)
+    return () => { cancelled = true; window.removeEventListener("online", onOnline) }
+  }, [])
 
   const locateMe = () => {
     if (!navigator.geolocation || !mapRef.current) return setError("Location is unavailable on this device.")
@@ -613,6 +653,45 @@ export default function MapView() {
         {/* Map container */}
         <div className="relative flex-1">
           <div ref={mapContainerRef} className="absolute inset-0" />
+
+          {/* Offline fallback: tiles cannot be pre-downloaded (OSM tile policy) */}
+          {offlineRows !== null && (
+            <div className="absolute inset-0 z-20 overflow-y-auto" style={{ background: C.bg }}>
+              <div className="px-4 py-3" style={{ borderBottom: `1px solid ${C.border}`, background: C.surface }}>
+                <p style={{ ...HEAD, fontSize: 14, fontWeight: 600, color: C.text }}>Offline map not downloaded</p>
+                <p className="mt-1 text-xs" style={{ ...BODY, color: C.muted }}>
+                  Map tiles cannot be downloaded in advance under the OpenStreetMap tile policy.
+                  Showing your cached records instead — tap one to open it.
+                </p>
+              </div>
+              {offlineRows.length === 0 ? (
+                <p className="px-4 py-6 text-sm" style={{ ...BODY, color: C.muted }}>
+                  No cached records on this phone. Preload offline data from Settings while online.
+                </p>
+              ) : (
+                <ul>
+                  {offlineRows.map((row) => (
+                    <li key={`${row.kind}-${row.id}`}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(row.kind === "observation" ? `/observations/${row.id}` : `/actions/${row.id}`)}
+                        className="w-full px-4 py-3 text-left"
+                        style={{ borderBottom: `1px solid ${C.borderMid}` }}
+                      >
+                        <span className="flex items-center gap-2">
+                          <span style={{ width: 10, height: 10, borderRadius: row.kind === "observation" ? 9999 : 2, background: PRIORITY_COLORS[row.priority as keyof typeof PRIORITY_COLORS] ?? C.muted, display: "inline-block" }} />
+                          <span className="text-xs" style={{ ...HEAD, color: C.muted }}>{row.referenceNumber}</span>
+                          <span className="text-xs uppercase" style={{ ...HEAD, color: C.dim }}>{row.kind}</span>
+                        </span>
+                        <span className="mt-0.5 block text-sm" style={{ ...BODY, color: C.text }}>{row.title}</span>
+                        {row.locationName && <span className="block text-xs" style={{ ...BODY, color: C.muted }}>{row.locationName}</span>}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          )}
 
           {/* Loading overlay */}
           {loading && (

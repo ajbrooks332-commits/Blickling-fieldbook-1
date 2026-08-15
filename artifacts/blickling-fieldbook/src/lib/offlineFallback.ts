@@ -17,6 +17,9 @@ export function setOfflineAccount(userId: number, propertyId: number): void {
 export function clearOfflineAccount(): void {
   account = null;
 }
+export function getOfflineAccount(): { userId: number; propertyId: number } | null {
+  return account;
+}
 
 type Row = Record<string, unknown>;
 
