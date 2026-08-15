@@ -145,8 +145,12 @@ router.get("/map", requireAuth, async (req, res) => {
   const query = z.object({ status: status.optional(), priority: priority.optional(), categoryId: idSchema.optional(),
     namedLocationId: idSchema.optional(), safetyIssue: z.enum(["true", "false"]).optional() }).safeParse(req.query);
   if (!query.success) return validationError(res, query.error);
+  // Observations plot at their direct GPS point when present, otherwise at
+  // their named location's coordinates.
+  const mapLatitude = sql<number>`COALESCE(${observationsTable.latitude}, ${namedLocationsTable.latitude})`;
+  const mapLongitude = sql<number>`COALESCE(${observationsTable.longitude}, ${namedLocationsTable.longitude})`;
   const conditions = [eq(observationsTable.propertyId, req.authUser!.propertyId!), isNull(observationsTable.deletedAt),
-    isNotNull(observationsTable.latitude), isNotNull(observationsTable.longitude)];
+    sql`${mapLatitude} IS NOT NULL`, sql`${mapLongitude} IS NOT NULL`];
   const q = query.data;
   if (q.status) conditions.push(eq(observationsTable.status, q.status));
   if (q.priority) conditions.push(eq(observationsTable.priority, q.priority));
@@ -156,13 +160,14 @@ router.get("/map", requireAuth, async (req, res) => {
   const where = and(...conditions);
   const [rows, totals] = await Promise.all([
     db.select({ id: observationsTable.id, title: observationsTable.title, referenceNumber: observationsTable.referenceNumber,
-      priority: observationsTable.priority, status: observationsTable.status, latitude: observationsTable.latitude,
-      longitude: observationsTable.longitude, categoryName: categoriesTable.name, categoryColour: categoriesTable.displayColour,
+      priority: observationsTable.priority, status: observationsTable.status, latitude: mapLatitude,
+      longitude: mapLongitude, categoryName: categoriesTable.name, categoryColour: categoriesTable.displayColour,
       namedLocationName: namedLocationsTable.name, safetyIssue: observationsTable.safetyIssue })
       .from(observationsTable).leftJoin(categoriesTable, eq(observationsTable.categoryId, categoriesTable.id))
       .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id))
       .where(where).orderBy(desc(observationsTable.createdAt)).limit(500),
-    db.select({ total: count() }).from(observationsTable).where(where),
+    db.select({ total: count() }).from(observationsTable)
+      .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id)).where(where),
   ]);
   const total = Number(totals[0]?.total ?? 0);
   res.setHeader("X-Total-Count", String(total));

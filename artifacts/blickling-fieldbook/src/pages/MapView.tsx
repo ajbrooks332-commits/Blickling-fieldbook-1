@@ -136,9 +136,34 @@ interface FilterPanelProps {
   locations: Array<{ id: number; name: string }>
   markerCount: number
   taskCount: number
+  showObservations: boolean
+  showTasks: boolean
+  onToggleObservations: () => void
+  onToggleTasks: () => void
 }
 
-function FilterPanel({ filters, onChange, onClear, categories, locations, markerCount, taskCount }: FilterPanelProps) {
+function LayerToggle({ id, label, checked, onToggle }: { id: string; label: string; checked: boolean; onToggle: () => void }) {
+  return (
+    <div className="flex items-center justify-between py-2 px-3 rounded-md" style={{ border: `1px solid ${C.border}` }}>
+      <label className="text-sm cursor-pointer" style={{ ...BODY, fontSize: 13, color: C.text }} htmlFor={id}>{label}</label>
+      <button
+        id={id}
+        role="switch"
+        aria-checked={checked}
+        onClick={onToggle}
+        className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none"
+        style={{ background: checked ? C.emerald : C.dim }}
+      >
+        <span
+          className="inline-block h-4 w-4 transform rounded-full shadow transition-transform"
+          style={{ background: "#fff", transform: checked ? "translateX(16px)" : "translateX(2px)" }}
+        />
+      </button>
+    </div>
+  )
+}
+
+function FilterPanel({ filters, onChange, onClear, categories, locations, markerCount, taskCount, showObservations, showTasks, onToggleObservations, onToggleTasks }: FilterPanelProps) {
   const active = hasActiveFilters(filters)
   return (
     <div className="flex flex-col gap-4 p-4 h-full overflow-y-auto" style={{ background: C.surface }}>
@@ -172,10 +197,22 @@ function FilterPanel({ filters, onChange, onClear, categories, locations, marker
         </span>
       </div>
 
+      {/* Layers */}
+      <div className="space-y-2">
+        <p style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
+          Layers
+        </p>
+        <LayerToggle id="layer-observations" label="Observations" checked={showObservations} onToggle={onToggleObservations} />
+        <LayerToggle id="layer-tasks" label="Open tasks" checked={showTasks} onToggle={onToggleTasks} />
+        <p style={{ ...BODY, fontSize: 11, color: C.dim }}>
+          Priority and location filters apply to both layers. Status, category and safety filters apply to observations only.
+        </p>
+      </div>
+
       {/* Status */}
       <div className="space-y-1">
         <label style={{ ...HEAD, fontSize: 10, fontWeight: 600, color: C.muted, textTransform: "uppercase", letterSpacing: "0.05em" }}>
-          Status
+          Status <span style={{ textTransform: "none", fontWeight: 400 }}>(observations)</span>
         </label>
         <select
           value={filters.status}
@@ -316,10 +353,16 @@ export default function MapView() {
   const [loading, setLoading] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [obsError, setObsError] = useState<string | null>(null)
+  const [taskError, setTaskError] = useState<string | null>(null)
+  const [obsUpdatedAt, setObsUpdatedAt] = useState<Date | null>(null)
+  const [taskUpdatedAt, setTaskUpdatedAt] = useState<Date | null>(null)
   const [truncated, setTruncated] = useState(false)
   const [totalMarkers, setTotalMarkers] = useState(0)
   const [taskTruncated, setTaskTruncated] = useState(false)
   const [totalTaskMarkers, setTotalTaskMarkers] = useState(0)
+  const [showObservations, setShowObservations] = useState(true)
+  const [showTasks, setShowTasks] = useState(true)
 
   const { data: categories = [] } = useListCategories()
   const { data: locations = [] } = useListLocations()
@@ -358,33 +401,46 @@ export default function MapView() {
   const fetchMarkers = useCallback(async () => {
     requestRef.current?.abort()
     const controller = new AbortController(); requestRef.current = controller
-    setLoading(true); setError(null)
-    try {
-      const qs = buildQueryString(filters)
-      const taskParams = new URLSearchParams()
-      if (filters.priority) taskParams.set('priority', filters.priority)
-      if (filters.namedLocationId) taskParams.set('namedLocationId', filters.namedLocationId)
-      const taskQs = taskParams.toString()
-      const [res, taskRes] = await Promise.all([
-        apiFetch('/api/observations/map' + (qs ? '?' + qs : ''), { signal: controller.signal }),
-        apiFetch('/api/actions/map' + (taskQs ? '?' + taskQs : ''), { signal: controller.signal }),
-      ])
-      if (!res.ok) throw new Error((await res.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map observations could not be loaded.')
-      if (!taskRes.ok) throw new Error((await taskRes.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map tasks could not be loaded.')
-      const data: MapMarker[] = await res.json()
-      const taskData: TaskMarker[] = await taskRes.json()
-      setMarkers(data)
-      setTaskMarkers(taskData)
-      setTotalMarkers(Number(res.headers.get("X-Total-Count") ?? data.length))
-      setTruncated(res.headers.get("X-Result-Truncated") === "true")
-      setTotalTaskMarkers(Number(taskRes.headers.get("X-Total-Count") ?? taskData.length))
-      setTaskTruncated(taskRes.headers.get("X-Result-Truncated") === "true")
-    } catch (err) {
-      if (err instanceof DOMException && err.name === "AbortError") return
-      setError(err instanceof Error ? err.message : "Map observations could not be loaded.")
-    } finally {
-      if (requestRef.current === controller) setLoading(false)
+    setLoading(true)
+    // Each layer is fetched independently so one failed request does not
+    // erase the other layer; the failed layer keeps its last data + data age.
+    const loadObservations = async () => {
+      try {
+        const qs = buildQueryString(filters)
+        const res = await apiFetch('/api/observations/map' + (qs ? '?' + qs : ''), { signal: controller.signal })
+        if (!res.ok) throw new Error((await res.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map observations could not be loaded.')
+        const data: MapMarker[] = await res.json()
+        setMarkers(data)
+        setTotalMarkers(Number(res.headers.get("X-Total-Count") ?? data.length))
+        setTruncated(res.headers.get("X-Result-Truncated") === "true")
+        setObsError(null)
+        setObsUpdatedAt(new Date())
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setObsError(err instanceof Error ? err.message : "Map observations could not be loaded.")
+      }
     }
+    const loadTasks = async () => {
+      try {
+        const taskParams = new URLSearchParams()
+        if (filters.priority) taskParams.set('priority', filters.priority)
+        if (filters.namedLocationId) taskParams.set('namedLocationId', filters.namedLocationId)
+        const taskQs = taskParams.toString()
+        const taskRes = await apiFetch('/api/actions/map' + (taskQs ? '?' + taskQs : ''), { signal: controller.signal })
+        if (!taskRes.ok) throw new Error((await taskRes.json().catch(() => null) as { error?: string } | null)?.error ?? 'Map tasks could not be loaded.')
+        const taskData: TaskMarker[] = await taskRes.json()
+        setTaskMarkers(taskData)
+        setTotalTaskMarkers(Number(taskRes.headers.get("X-Total-Count") ?? taskData.length))
+        setTaskTruncated(taskRes.headers.get("X-Result-Truncated") === "true")
+        setTaskError(null)
+        setTaskUpdatedAt(new Date())
+      } catch (err) {
+        if (err instanceof DOMException && err.name === "AbortError") return
+        setTaskError(err instanceof Error ? err.message : "Map tasks could not be loaded.")
+      }
+    }
+    await Promise.all([loadObservations(), loadTasks()])
+    if (requestRef.current === controller) setLoading(false)
   }, [filters])
 
   const locateMe = () => {
@@ -407,7 +463,7 @@ export default function MapView() {
     const group = clusterGroupRef.current
     if (!group) return
     group.clearLayers()
-    markers.forEach((m) => {
+    if (showObservations) markers.forEach((m) => {
       const color = PRIORITY_COLORS[m.priority] || '#8b949e'
       const icon = L.divIcon({
         className: '',
@@ -420,7 +476,7 @@ export default function MapView() {
       marker.on('click', () => navigate(`/observations/${m.id}`))
       group.addLayer(marker)
     })
-    taskMarkers.forEach((t) => {
+    if (showTasks) taskMarkers.forEach((t) => {
       const color = PRIORITY_COLORS[t.priority] || '#8b949e'
       const icon = L.divIcon({
         className: '',
@@ -433,7 +489,7 @@ export default function MapView() {
       marker.on('click', () => navigate(`/actions/${t.id}`))
       group.addLayer(marker)
     })
-  }, [markers, taskMarkers, navigate])
+  }, [markers, taskMarkers, navigate, showObservations, showTasks])
 
   const handleClearFilters = () => setFilters(DEFAULT_FILTERS)
   const active = hasActiveFilters(filters)
@@ -447,6 +503,10 @@ export default function MapView() {
       locations={locations}
       markerCount={markers.length}
       taskCount={taskMarkers.length}
+      showObservations={showObservations}
+      showTasks={showTasks}
+      onToggleObservations={() => setShowObservations(v => !v)}
+      onToggleTasks={() => setShowTasks(v => !v)}
     />
   )
 
@@ -538,6 +598,12 @@ export default function MapView() {
           </div>
         </div>
         {error && <div role="alert" className="z-10 border-b border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">{error}</div>}
+        {obsError && <div role="alert" className="z-10 border-b border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {obsError}{obsUpdatedAt ? ` Showing observations as of ${obsUpdatedAt.toLocaleTimeString()}.` : ' No observation data is available.'}
+        </div>}
+        {taskError && <div role="alert" className="z-10 border-b border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {taskError}{taskUpdatedAt ? ` Showing tasks as of ${taskUpdatedAt.toLocaleTimeString()}.` : ' No task data is available.'}
+        </div>}
         {(truncated || taskTruncated) && <div role="status" className="z-10 border-b border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-200">
           {truncated && `Showing the newest ${markers.length} of ${totalMarkers} matching observations. `}
           {taskTruncated && `Showing the newest ${taskMarkers.length} of ${totalTaskMarkers} matching tasks. `}

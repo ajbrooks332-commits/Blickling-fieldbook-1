@@ -166,6 +166,57 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       const closedOverdue = await fetch(`${origin}/api/actions?bucket=closed&overdue=true`, { headers: { Cookie: cookie } });
       assert.equal(closedOverdue.status, 400);
 
+      // --- Regression: map coordinate precedence and inactive-location rejection ---
+      const locRes = await mutate("/api/locations", "POST", { name: "Map test paddock", latitude: 52.9, longitude: 1.4 });
+      assert.equal(locRes.status, 201);
+      const mapLoc = await locRes.json() as { id: number };
+
+      const gpsObsRes = await mutate("/api/observations", "POST", {
+        title: "GPS observation for map", categoryId: categories[0].id, priority: "normal",
+        status: "submitted", observedAt: new Date().toISOString(), latitude: 52.7, longitude: 1.1,
+      });
+      const gpsObs = await gpsObsRes.json() as { id: number };
+      const locatedActionRes = await mutate("/api/actions", "POST", {
+        title: "Task with own location", observationId: gpsObs.id, namedLocationId: mapLoc.id,
+        assignedToUserId: admin.id, priority: "normal",
+      });
+      assert.equal(locatedActionRes.status, 201);
+      const locatedAction = await locatedActionRes.json() as { id: number };
+      const actionMap = await fetch(`${origin}/api/actions/map`, { headers: { Cookie: cookie } });
+      assert.equal(actionMap.status, 200);
+      const actionRows = await actionMap.json() as Array<{ id: number; latitude: string | number; longitude: string | number }>;
+      const locatedRow = actionRows.find((r) => r.id === locatedAction.id);
+      assert.ok(locatedRow, "task with own location should appear on the map");
+      // The task's OWN named location outranks the linked observation's GPS point.
+      assert.equal(Number(locatedRow!.latitude), 52.9);
+      assert.equal(Number(locatedRow!.longitude), 1.4);
+
+      const noGpsObsRes = await mutate("/api/observations", "POST", {
+        title: "Named-location observation", categoryId: categories[0].id, priority: "normal",
+        status: "submitted", observedAt: new Date().toISOString(), namedLocationId: mapLoc.id,
+      });
+      const noGpsObs = await noGpsObsRes.json() as { id: number };
+      const obsMap = await fetch(`${origin}/api/observations/map`, { headers: { Cookie: cookie } });
+      const obsRows = await obsMap.json() as Array<{ id: number; latitude: string | number; longitude: string | number }>;
+      const fallbackRow = obsRows.find((r) => r.id === noGpsObs.id);
+      assert.ok(fallbackRow, "observation without GPS should fall back to its named location");
+      assert.equal(Number(fallbackRow!.latitude), 52.9);
+
+      const deactivate = await mutate(`/api/locations/${mapLoc.id}`, "PATCH", { active: false });
+      assert.equal(deactivate.status, 200);
+      const inactiveAction = await mutate("/api/actions", "POST", {
+        title: "Task at inactive location", namedLocationId: mapLoc.id, assignedToUserId: admin.id, priority: "low",
+      });
+      assert.equal(inactiveAction.status, 400);
+      const typesRes = await fetch(`${origin}/api/activity-types`, { headers: { Cookie: cookie } });
+      const activityTypes = await typesRes.json() as Array<{ id: number }>;
+      assert.ok(activityTypes.length > 0, "seeded activity types expected");
+      const inactiveActivity = await mutate("/api/activities", "POST", {
+        activityTypeId: activityTypes[0].id, namedLocationIds: [mapLoc.id], activityDate: "2026-08-01",
+        durationMinutes: 60, participantUserIds: [admin.id],
+      });
+      assert.equal(inactiveActivity.status, 400);
+
       const archive = await mutate(`/api/observations/${observation.id}`, "DELETE");
       assert.equal(archive.status, 204);
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });

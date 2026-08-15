@@ -240,7 +240,8 @@ router.post("/activities", requireAuth, async (req, res) => {
   const uniqueLocations = [...new Set(namedLocationIds)];
   if (uniqueLocations.length > 0) {
     const found = await db.select({ id: namedLocationsTable.id }).from(namedLocationsTable)
-      .where(and(inArray(namedLocationsTable.id, uniqueLocations), eq(namedLocationsTable.propertyId, propertyId)));
+      .where(and(inArray(namedLocationsTable.id, uniqueLocations), eq(namedLocationsTable.propertyId, propertyId),
+        eq(namedLocationsTable.active, true)));
     if (found.length !== uniqueLocations.length) return void res.status(400).json({ error: "Unknown location" });
   }
 

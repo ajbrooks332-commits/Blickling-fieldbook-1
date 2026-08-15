@@ -203,8 +203,10 @@ router.get("/map", requireAuth, async (req, res) => {
   if (!query.success) return validationError(res, query.error);
   const q = query.data;
   const actionLoc = alias(namedLocationsTable, "action_loc");
-  const latitude = sql<number>`COALESCE(${observationsTable.latitude}, ${actionLoc.latitude}, ${namedLocationsTable.latitude})`;
-  const longitude = sql<number>`COALESCE(${observationsTable.longitude}, ${actionLoc.longitude}, ${namedLocationsTable.longitude})`;
+  // Precedence: the task's OWN named location first, then the linked
+  // observation's GPS point, then the linked observation's named location.
+  const latitude = sql<number>`COALESCE(${actionLoc.latitude}, ${observationsTable.latitude}, ${namedLocationsTable.latitude})`;
+  const longitude = sql<number>`COALESCE(${actionLoc.longitude}, ${observationsTable.longitude}, ${namedLocationsTable.longitude})`;
   const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt),
     sql`${latitude} IS NOT NULL`, sql`${longitude} IS NOT NULL`];
   if (q.bucket === "open" || !q.bucket) conditions.push(sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`);
