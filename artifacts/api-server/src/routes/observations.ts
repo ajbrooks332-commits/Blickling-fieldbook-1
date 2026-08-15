@@ -177,6 +177,38 @@ router.get("/map", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// Archived observations (managers): list + restore. Restore preserves audit
+// history and references; nothing is ever permanently purged here.
+router.get("/archived", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const propertyId = req.authUser!.propertyId!;
+  const rows = await db.select(observationFields).from(observationsTable)
+    .leftJoin(categoriesTable, eq(observationsTable.categoryId, categoriesTable.id))
+    .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id))
+    .leftJoin(usersTable, eq(observationsTable.reportedByUserId, usersTable.id))
+    .where(and(eq(observationsTable.propertyId, propertyId), sql`${observationsTable.deletedAt} IS NOT NULL`))
+    .orderBy(desc(observationsTable.deletedAt)).limit(200);
+  const archivedAt = await db.select({ id: observationsTable.id, deletedAt: observationsTable.deletedAt }).from(observationsTable)
+    .where(and(eq(observationsTable.propertyId, propertyId), sql`${observationsTable.deletedAt} IS NOT NULL`));
+  const deletedMap = new Map(archivedAt.map((r) => [r.id, r.deletedAt]));
+  res.json({ observations: rows.map((row) => ({ ...row, archivedAt: deletedMap.get(row.id) ?? null })) });
+});
+
+router.post("/:id/restore", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const user = req.authUser!;
+  const [existing] = await db.select().from(observationsTable).where(and(eq(observationsTable.id, id.data),
+    eq(observationsTable.propertyId, user.propertyId!), sql`${observationsTable.deletedAt} IS NOT NULL`)).limit(1);
+  if (!existing) return void res.status(404).json({ error: "Archived observation not found" });
+  await db.transaction(async (tx) => {
+    await tx.update(observationsTable).set({ deletedAt: null, deletedByUserId: null, updatedAt: new Date() })
+      .where(eq(observationsTable.id, id.data));
+    await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, observationId: id.data, userId: user.id,
+      eventType: "observation_restored", newValue: existing.title });
+  });
+  res.json({ restored: true });
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
   const id = idSchema.safeParse(req.params.id);
   if (!id.success) return validationError(res, id.error);

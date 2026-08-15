@@ -27,6 +27,7 @@ const Users = lazy(() => import("@/pages/Users"));
 const Categories = lazy(() => import("@/pages/Categories"));
 const Locations = lazy(() => import("@/pages/Locations"));
 const Settings = lazy(() => import("@/pages/Settings"));
+const Archive = lazy(() => import("@/pages/Archive"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -68,6 +69,7 @@ function AuthenticatedRoutes({ user }: { user: AuthUser }) {
       <Route path="/map" component={MapView} />
       <Route path="/activities" component={Activities} />
       <Route path="/reports">{() => <RolePage user={user} roles={managers}><Reports /></RolePage>}</Route>
+      <Route path="/archive">{() => <RolePage user={user} roles={managers}><Archive /></RolePage>}</Route>
       <Route path="/users">{() => <RolePage user={user} roles={["administrator"]}><Users /></RolePage>}</Route>
       <Route path="/categories">{() => <RolePage user={user} roles={managers}><Categories /></RolePage>}</Route>
       <Route path="/locations">{() => <RolePage user={user} roles={managers}><Locations /></RolePage>}</Route>

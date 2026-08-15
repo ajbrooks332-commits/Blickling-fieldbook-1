@@ -659,6 +659,26 @@ export const DeleteObservationResponse = zod.void()
 
 
 /**
+ * @summary List archived observations (managers)
+ */
+export const ListArchivedObservationsResponse = zod.object({
+  "observations": zod.array(zod.record(zod.string(), zod.unknown()))
+}).describe('Archived observations with their archive timestamps (manager view).')
+
+
+/**
+ * @summary Restore an archived observation (managers)
+ */
+export const RestoreObservationParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreObservationResponse = zod.object({
+  "restored": zod.boolean()
+})
+
+
+/**
  * @summary Update observation status
  */
 export const UpdateObservationStatusParams = zod.object({
@@ -1026,6 +1046,26 @@ export const UpdateActionResponse = zod.object({
   "propertyId": zod.number().optional(),
   "createdAt": zod.string(),
   "updatedAt": zod.string().optional()
+})
+
+
+/**
+ * @summary List archived actions (managers)
+ */
+export const ListArchivedActionsResponse = zod.object({
+  "actions": zod.array(zod.record(zod.string(), zod.unknown()))
+}).describe('Archived actions with their archive timestamps (manager view).')
+
+
+/**
+ * @summary Restore an archived action (managers)
+ */
+export const RestoreActionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const RestoreActionResponse = zod.object({
+  "restored": zod.boolean()
 })
 
 

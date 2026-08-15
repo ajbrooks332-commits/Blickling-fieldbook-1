@@ -564,6 +564,38 @@ paths:
         "204":
           description: Deleted
 
+  /observations/archived:
+    get:
+      operationId: listArchivedObservations
+      tags: [observations]
+      summary: List archived observations (managers)
+      responses:
+        "200":
+          description: Archived observations
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchivedObservationList"
+
+  /observations/{id}/restore:
+    post:
+      operationId: restoreObservation
+      tags: [observations]
+      summary: Restore an archived observation (managers)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreResult"
+
   /observations/{id}/status:
     patch:
       operationId: updateObservationStatus
@@ -714,6 +746,40 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Action"
+
+  /actions/archived:
+    get:
+      operationId: listArchivedActions
+      tags: [actions]
+      summary: List archived actions (managers)
+      responses:
+        "200":
+          description: Archived actions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ArchivedActionList"
+
+  /actions/{id}/restore:
+    post:
+      operationId: restoreAction
+      tags: [actions]
+      summary: Restore an archived action (managers)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Restored
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RestoreResult"
+        "409":
+          description: Linked observation is still archived
 
   /actions/{id}/status:
     patch:
@@ -2273,6 +2339,35 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ChartPoint"
+
+    RestoreResult:
+      type: object
+      required: [restored]
+      properties:
+        restored:
+          type: boolean
+
+    ArchivedObservationList:
+      type: object
+      description: Archived observations with their archive timestamps (manager view).
+      required: [observations]
+      properties:
+        observations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    ArchivedActionList:
+      type: object
+      description: Archived actions with their archive timestamps (manager view).
+      required: [actions]
+      properties:
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
 
     # Storage
     OfflineSnapshot:

@@ -240,6 +240,41 @@ router.get("/map", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// Archived actions (managers): list + restore.
+router.get("/archived", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const propertyId = req.authUser!.propertyId!;
+  const rows = await db.select({ ...actionFields, archivedAt: actionsTable.deletedAt }).from(actionsTable)
+    .leftJoin(observationsTable, eq(actionsTable.observationId, observationsTable.id))
+    .leftJoin(usersTable, eq(actionsTable.assignedToUserId, usersTable.id))
+    .leftJoin(namedLocationsTable, eq(actionsTable.namedLocationId, namedLocationsTable.id))
+    .where(and(eq(actionsTable.propertyId, propertyId), sql`${actionsTable.deletedAt} IS NOT NULL`))
+    .orderBy(desc(actionsTable.deletedAt)).limit(200);
+  res.json({ actions: rows });
+});
+
+router.post("/:id/restore", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
+  const id = idSchema.safeParse(req.params.id);
+  if (!id.success) return validationError(res, id.error);
+  const user = req.authUser!;
+  const [existing] = await db.select().from(actionsTable).where(and(eq(actionsTable.id, id.data),
+    eq(actionsTable.propertyId, user.propertyId!), sql`${actionsTable.deletedAt} IS NOT NULL`)).limit(1);
+  if (!existing) return void res.status(404).json({ error: "Archived action not found" });
+  // A task restored under an archived observation would be invisible in normal
+  // views; require the parent to be live first.
+  if (existing.observationId) {
+    const [parent] = await db.select({ deletedAt: observationsTable.deletedAt }).from(observationsTable)
+      .where(eq(observationsTable.id, existing.observationId)).limit(1);
+    if (parent?.deletedAt) return void res.status(409).json({ error: "Restore the linked observation first" });
+  }
+  await db.transaction(async (tx) => {
+    await tx.update(actionsTable).set({ deletedAt: null, deletedByUserId: null, updatedAt: new Date() })
+      .where(eq(actionsTable.id, id.data));
+    await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, actionId: id.data, observationId: existing.observationId,
+      userId: user.id, eventType: "action_restored", newValue: existing.title });
+  });
+  res.json({ restored: true });
+});
+
 router.get("/:id", requireAuth, async (req, res) => {
   const id = idSchema.safeParse(req.params.id);
   if (!id.success) return validationError(res, id.error);

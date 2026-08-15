@@ -911,6 +911,28 @@ export interface ReportSummary {
   byLocation?: ChartPoint[];
 }
 
+export interface RestoreResult {
+  restored: boolean;
+}
+
+export type ArchivedObservationListObservationsItem = { [key: string]: unknown };
+
+/**
+ * Archived observations with their archive timestamps (manager view).
+ */
+export interface ArchivedObservationList {
+  observations: ArchivedObservationListObservationsItem[];
+}
+
+export type ArchivedActionListActionsItem = { [key: string]: unknown };
+
+/**
+ * Archived actions with their archive timestamps (manager view).
+ */
+export interface ArchivedActionList {
+  actions: ArchivedActionListActionsItem[];
+}
+
 export type OfflineSnapshotCategoriesItem = { [key: string]: unknown };
 
 export type OfflineSnapshotLocationsItem = { [key: string]: unknown };

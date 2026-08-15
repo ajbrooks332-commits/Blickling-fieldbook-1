@@ -18,6 +18,7 @@ import {
   ChevronRight,
   CloudUpload,
   WifiOff,
+  ArchiveRestore,
 } from "lucide-react"
 import { useLogout } from "@workspace/api-client-react"
 import { clearPrivateCache, pendingCount, pendingCountForOtherUser, pendingCountForUser, syncOutbox } from "@/lib/offline"
@@ -63,6 +64,7 @@ const sidebarAdmin = [
   { label: "Users",      href: "/users",      icon: Users },
   { label: "Categories", href: "/categories", icon: Tags },
   { label: "Locations",  href: "/locations",  icon: MapPin },
+  { label: "Archive",    href: "/archive",    icon: ArchiveRestore },
 ]
 
 export default function AppShell({ children, user }: { children: React.ReactNode; user: AuthUser }) {

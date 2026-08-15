@@ -32,6 +32,8 @@ import type {
   ActivityReport,
   ActivityType,
   ActivityTypeInput,
+  ArchivedActionList,
+  ArchivedObservationList,
   Assignee,
   AuthUser,
   Category,
@@ -68,6 +70,7 @@ import type {
   ObservationUpdate,
   OfflineSnapshot,
   ReportSummary,
+  RestoreResult,
   SetupInput,
   SetupStatus,
   StatusUpdate,
@@ -1977,6 +1980,154 @@ export const useDeleteObservation = <TError = ErrorType<unknown>,
       return useMutation(getDeleteObservationMutationOptions(options));
     }
 
+export const getListArchivedObservationsUrl = () => {
+
+
+
+
+  return `/api/observations/archived`
+}
+
+/**
+ * @summary List archived observations (managers)
+ */
+export const listArchivedObservations = async ( options?: RequestInit): Promise<ArchivedObservationList> => {
+
+  return customFetch<ArchivedObservationList>(getListArchivedObservationsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListArchivedObservationsQueryKey = () => {
+    return [
+    `/api/observations/archived`
+    ] as const;
+    }
+
+
+export const getListArchivedObservationsQueryOptions = <TData = Awaited<ReturnType<typeof listArchivedObservations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listArchivedObservations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListArchivedObservationsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listArchivedObservations>>> = ({ signal }) => listArchivedObservations({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listArchivedObservations>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListArchivedObservationsQueryResult = NonNullable<Awaited<ReturnType<typeof listArchivedObservations>>>
+export type ListArchivedObservationsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List archived observations (managers)
+ */
+
+export function useListArchivedObservations<TData = Awaited<ReturnType<typeof listArchivedObservations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listArchivedObservations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListArchivedObservationsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRestoreObservationUrl = (id: number,) => {
+
+
+
+
+  return `/api/observations/${id}/restore`
+}
+
+/**
+ * @summary Restore an archived observation (managers)
+ */
+export const restoreObservation = async (id: number, options?: RequestInit): Promise<RestoreResult> => {
+
+  return customFetch<RestoreResult>(getRestoreObservationUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreObservationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreObservation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreObservation>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreObservation'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreObservation>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreObservation(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreObservationMutationResult = NonNullable<Awaited<ReturnType<typeof restoreObservation>>>
+
+    export type RestoreObservationMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Restore an archived observation (managers)
+ */
+export const useRestoreObservation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreObservation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreObservation>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreObservationMutationOptions(options));
+    }
+
 export const getUpdateObservationStatusUrl = (id: number,) => {
 
 
@@ -2428,6 +2579,154 @@ export const useUpdateAction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateActionMutationOptions(options));
+    }
+
+export const getListArchivedActionsUrl = () => {
+
+
+
+
+  return `/api/actions/archived`
+}
+
+/**
+ * @summary List archived actions (managers)
+ */
+export const listArchivedActions = async ( options?: RequestInit): Promise<ArchivedActionList> => {
+
+  return customFetch<ArchivedActionList>(getListArchivedActionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListArchivedActionsQueryKey = () => {
+    return [
+    `/api/actions/archived`
+    ] as const;
+    }
+
+
+export const getListArchivedActionsQueryOptions = <TData = Awaited<ReturnType<typeof listArchivedActions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listArchivedActions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListArchivedActionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listArchivedActions>>> = ({ signal }) => listArchivedActions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listArchivedActions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListArchivedActionsQueryResult = NonNullable<Awaited<ReturnType<typeof listArchivedActions>>>
+export type ListArchivedActionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List archived actions (managers)
+ */
+
+export function useListArchivedActions<TData = Awaited<ReturnType<typeof listArchivedActions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listArchivedActions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListArchivedActionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getRestoreActionUrl = (id: number,) => {
+
+
+
+
+  return `/api/actions/${id}/restore`
+}
+
+/**
+ * @summary Restore an archived action (managers)
+ */
+export const restoreAction = async (id: number, options?: RequestInit): Promise<RestoreResult> => {
+
+  return customFetch<RestoreResult>(getRestoreActionUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+
+export const getRestoreActionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreAction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof restoreAction>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['restoreAction'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof restoreAction>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  restoreAction(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RestoreActionMutationResult = NonNullable<Awaited<ReturnType<typeof restoreAction>>>
+
+    export type RestoreActionMutationError = ErrorType<void>
+
+    /**
+ * @summary Restore an archived action (managers)
+ */
+export const useRestoreAction = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof restoreAction>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof restoreAction>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRestoreActionMutationOptions(options));
     }
 
 export const getUpdateActionStatusUrl = (id: number,) => {

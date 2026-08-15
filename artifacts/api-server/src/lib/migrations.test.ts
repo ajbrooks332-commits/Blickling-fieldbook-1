@@ -324,6 +324,38 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });
       assert.equal(archivedAction.status, 404);
 
+      // --- Regression: archived lists + restore (managers) ---
+      const archivedObsList = await fetch(`${origin}/api/observations/archived`, { headers: { Cookie: cookie } });
+      assert.equal(archivedObsList.status, 200);
+      const archivedObsBody = await archivedObsList.json() as { observations: Array<{ id: number; archivedAt: string | null }> };
+      assert.ok(archivedObsBody.observations.some((o) => o.id === observation.id && o.archivedAt));
+      const archivedActList = await fetch(`${origin}/api/actions/archived`, { headers: { Cookie: cookie } });
+      assert.equal(archivedActList.status, 200);
+      const archivedActBody = await archivedActList.json() as { actions: Array<{ id: number }> };
+      assert.ok(archivedActBody.actions.some((a) => a.id === action.id));
+
+      // Restoring a task under an archived observation must 409 first.
+      const blockedRestore = await mutate(`/api/actions/${action.id}/restore`, "POST", {});
+      assert.equal(blockedRestore.status, 409);
+      const obsRestore = await mutate(`/api/observations/${observation.id}/restore`, "POST", {});
+      assert.equal(obsRestore.status, 200);
+      const actRestore = await mutate(`/api/actions/${action.id}/restore`, "POST", {});
+      assert.equal(actRestore.status, 200);
+      const restoredAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });
+      assert.equal(restoredAction.status, 200);
+      // Audit history preserved through archive/restore.
+      const restoredObservation = await fetch(`${origin}/api/observations/${observation.id}`, { headers: { Cookie: cookie } });
+      assert.equal(restoredObservation.status, 200);
+      const restoredObsBody = await restoredObservation.json() as { auditEvents: Array<{ eventType: string }> };
+      assert.ok(restoredObsBody.auditEvents.some((e) => e.eventType === "observation_archived"));
+      assert.ok(restoredObsBody.auditEvents.some((e) => e.eventType === "observation_restored"));
+
+      // Re-archive so later reference-data assertions see the original state.
+      const rearchiveAct = await mutate(`/api/actions/${action.id}`, "DELETE");
+      assert.equal(rearchiveAct.status, 204);
+      const rearchiveObs = await mutate(`/api/observations/${observation.id}`, "DELETE");
+      assert.equal(rearchiveObs.status, 204);
+
       const referenceData = await pool.query(`
         SELECT
           (SELECT count(*)::int FROM users WHERE active) AS users,
