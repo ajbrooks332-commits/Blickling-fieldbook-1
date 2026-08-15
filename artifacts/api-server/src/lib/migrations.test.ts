@@ -217,6 +217,68 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       });
       assert.equal(inactiveActivity.status, 400);
 
+      // --- Regression: activity labour model (person-hours vs elapsed hours) ---
+      const typesRes2 = await fetch(`${origin}/api/activity-types`, { headers: { Cookie: cookie } });
+      const actTypes = await typesRes2.json() as Array<{ id: number }>;
+      const typeId = actTypes[0].id;
+      const activityDate = new Date().toISOString().slice(0, 10);
+
+      // Zero participants without an explicit hours status must be rejected.
+      const noStatus = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 60, participantUserIds: [],
+      });
+      assert.equal(noStatus.status, 400);
+
+      // 2 elapsed hours x 4 staff = 8 staff person-hours. (Use available users; here 1 admin.)
+      const staffAct = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 120, participantUserIds: [admin.id],
+      });
+      assert.equal(staffAct.status, 201);
+
+      // Elapsed-only and mixed volunteer/contractor cases.
+      const elapsedOnly = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 60, participantUserIds: [], hoursStatus: "elapsed_only",
+      });
+      assert.equal(elapsedOnly.status, 201);
+      const mixed = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 90, participantUserIds: [admin.id],
+        volunteerCount: 2, contractorHoursUnknown: true,
+      });
+      assert.equal(mixed.status, 201);
+      // Contractor hours cannot be both recorded and unknown.
+      const conflict = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 60, participantUserIds: [],
+        contractorMinutes: 60, contractorHoursUnknown: true,
+      });
+      assert.equal(conflict.status, 400);
+
+      const actList = await fetch(`${origin}/api/activities`, { headers: { Cookie: cookie } });
+      const actListBody = await actList.json() as { activities: Array<{ durationMinutes: number; elapsedMinutes: number;
+        hoursStatus: string; staffPersonMinutes: number; volunteerPersonMinutes: number | null;
+        contractorMinutes: number | null; contractorHoursUnknown: boolean }> };
+      const staffRow = actListBody.activities.find((a) => a.durationMinutes === 120);
+      assert.ok(staffRow);
+      assert.equal(staffRow!.hoursStatus, "staff_participants");
+      assert.equal(staffRow!.staffPersonMinutes, 120); // 1 participant x 120 min
+      const elapsedRow = actListBody.activities.find((a) => a.durationMinutes === 60 && a.hoursStatus === "elapsed_only");
+      assert.ok(elapsedRow);
+      assert.equal(elapsedRow!.staffPersonMinutes, 0);
+      const mixedRow = actListBody.activities.find((a) => a.durationMinutes === 90);
+      assert.ok(mixedRow);
+      assert.equal(mixedRow!.staffPersonMinutes, 90);
+      assert.equal(mixedRow!.volunteerPersonMinutes, 180); // 2 volunteers x 90 min
+      assert.equal(mixedRow!.contractorHoursUnknown, true);
+      assert.equal(mixedRow!.contractorMinutes, null); // unknown stays unknown, never zero
+
+      const actReport = await fetch(`${origin}/api/activities/report`, { headers: { Cookie: cookie } });
+      const reportBody = await actReport.json() as { totalMinutes: number; totalStaffPersonMinutes: number;
+        totalVolunteerPersonMinutes: number; contractorUnknownCount: number; unattributedCount: number };
+      assert.equal(reportBody.totalMinutes, 270);
+      assert.equal(reportBody.totalStaffPersonMinutes, 210);
+      assert.equal(reportBody.totalVolunteerPersonMinutes, 180);
+      assert.equal(reportBody.contractorUnknownCount, 1);
+      assert.equal(reportBody.unattributedCount, 1);
+
       const archive = await mutate(`/api/observations/${observation.id}`, "DELETE");
       assert.equal(archive.status, 204);
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });

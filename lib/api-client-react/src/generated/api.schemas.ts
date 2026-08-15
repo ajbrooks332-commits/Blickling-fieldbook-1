@@ -237,26 +237,51 @@ export interface ActivityLocation {
   name: string;
 }
 
-export interface ActivityReportTypeRow {
+export interface LabourTotals {
+  /** Total elapsed minutes (never labelled "total hours"). */
+  minutes: number;
+  count: number;
+  /** Elapsed minutes multiplied by selected staff participants. */
+  staffPersonMinutes: number;
+  volunteerPersonMinutes: number;
+  contractorRecordedMinutes: number;
+  /** Number of rows whose contractor hours are unknown. */
+  contractorUnknownCount: number;
+  /** Rows recorded as elapsed-only or other-unknown labour. */
+  unattributedCount: number;
+}
+
+export type ActivityReportTypeRow = LabourTotals & {
   activityTypeId: number;
   name: string;
   category: string;
-  minutes: number;
-  count: number;
-}
+};
 
-export interface ActivityReportCategoryRow {
+export type ActivityReportCategoryRow = LabourTotals & {
   category: string;
-  minutes: number;
-  count: number;
-}
+};
 
 export interface ActivityReport {
   totalMinutes: number;
   totalCount: number;
+  totalStaffPersonMinutes: number;
+  totalVolunteerPersonMinutes: number;
+  totalContractorRecordedMinutes: number;
+  contractorUnknownCount: number;
+  unattributedCount: number;
   byType: ActivityReportTypeRow[];
   byCategory: ActivityReportCategoryRow[];
 }
+
+export type ActivityLogHoursStatus = typeof ActivityLogHoursStatus[keyof typeof ActivityLogHoursStatus];
+
+
+export const ActivityLogHoursStatus = {
+  staff_participants: 'staff_participants',
+  elapsed_only: 'elapsed_only',
+  contractor_unknown: 'contractor_unknown',
+  other_unknown: 'other_unknown',
+} as const;
 
 export interface ActivityLog {
   id: number;
@@ -267,6 +292,17 @@ export interface ActivityLog {
   locations: ActivityLocation[];
   activityDate: string;
   durationMinutes: number;
+  /** Same as durationMinutes; explicit "elapsed" label. */
+  elapsedMinutes: number;
+  hoursStatus: ActivityLogHoursStatus;
+  staffPersonMinutes: number;
+  /** @nullable */
+  volunteerCount?: number | null;
+  /** @nullable */
+  volunteerPersonMinutes?: number | null;
+  /** @nullable */
+  contractorMinutes?: number | null;
+  contractorHoursUnknown: boolean;
   /** @nullable */
   notes?: string | null;
   recordedByUserId: number;
@@ -274,6 +310,19 @@ export interface ActivityLog {
   participants: ActivityParticipant[];
   createdAt: string;
 }
+
+/**
+ * Required (non-staff value) when no participants, volunteers or contractor labour are recorded.
+ */
+export type ActivityLogInputHoursStatus = typeof ActivityLogInputHoursStatus[keyof typeof ActivityLogInputHoursStatus];
+
+
+export const ActivityLogInputHoursStatus = {
+  staff_participants: 'staff_participants',
+  elapsed_only: 'elapsed_only',
+  contractor_unknown: 'contractor_unknown',
+  other_unknown: 'other_unknown',
+} as const;
 
 export interface ActivityLogInput {
   activityTypeId: number;
@@ -291,6 +340,20 @@ export interface ActivityLogInput {
   durationMinutes: number;
   /** @maxItems 50 */
   participantUserIds?: number[];
+  /** Required (non-staff value) when no participants, volunteers or contractor labour are recorded. */
+  hoursStatus?: ActivityLogInputHoursStatus;
+  /**
+     * @minimum 0
+     * @maximum 500
+     * @nullable
+     */
+  volunteerCount?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  contractorMinutes?: number | null;
+  contractorHoursUnknown?: boolean;
   /**
      * @maxLength 2000
      * @nullable

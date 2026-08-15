@@ -1150,6 +1150,13 @@ export const ListActivitiesResponse = zod.object({
 })),
   "activityDate": zod.string(),
   "durationMinutes": zod.number(),
+  "elapsedMinutes": zod.number().describe('Same as durationMinutes; explicit \"elapsed\" label.'),
+  "hoursStatus": zod.enum(['staff_participants', 'elapsed_only', 'contractor_unknown', 'other_unknown']),
+  "staffPersonMinutes": zod.number(),
+  "volunteerCount": zod.number().nullish(),
+  "volunteerPersonMinutes": zod.number().nullish(),
+  "contractorMinutes": zod.number().nullish(),
+  "contractorHoursUnknown": zod.boolean(),
   "notes": zod.string().nullish(),
   "recordedByUserId": zod.number(),
   "recordedByName": zod.string(),
@@ -1176,6 +1183,12 @@ export const createActivityBodyDurationMinutesMax = 1440;
 
 export const createActivityBodyParticipantUserIdsMax = 50;
 
+export const createActivityBodyVolunteerCountMin = 0;
+export const createActivityBodyVolunteerCountMax = 500;
+
+export const createActivityBodyContractorMinutesMin = 0;
+
+export const createActivityBodyContractorHoursUnknownDefault = false;
 export const createActivityBodyNotesMax = 2000;
 
 
@@ -1186,6 +1199,10 @@ export const CreateActivityBody = zod.object({
   "activityDate": zod.string().regex(createActivityBodyActivityDateRegExp).describe('Calendar date (YYYY-MM-DD); must not be in the future.'),
   "durationMinutes": zod.number().min(createActivityBodyDurationMinutesMin).max(createActivityBodyDurationMinutesMax),
   "participantUserIds": zod.array(zod.number()).max(createActivityBodyParticipantUserIdsMax).optional(),
+  "hoursStatus": zod.enum(['staff_participants', 'elapsed_only', 'contractor_unknown', 'other_unknown']).optional().describe('Required (non-staff value) when no participants, volunteers or contractor labour are recorded.'),
+  "volunteerCount": zod.number().min(createActivityBodyVolunteerCountMin).max(createActivityBodyVolunteerCountMax).nullish(),
+  "contractorMinutes": zod.number().min(createActivityBodyContractorMinutesMin).nullish(),
+  "contractorHoursUnknown": zod.boolean().default(createActivityBodyContractorHoursUnknownDefault),
   "notes": zod.string().max(createActivityBodyNotesMax).nullish()
 })
 
@@ -1205,18 +1222,35 @@ export const GetActivityReportQueryParams = zod.object({
 export const GetActivityReportResponse = zod.object({
   "totalMinutes": zod.number(),
   "totalCount": zod.number(),
+  "totalStaffPersonMinutes": zod.number(),
+  "totalVolunteerPersonMinutes": zod.number(),
+  "totalContractorRecordedMinutes": zod.number(),
+  "contractorUnknownCount": zod.number(),
+  "unattributedCount": zod.number(),
   "byType": zod.array(zod.object({
+  "minutes": zod.number().describe('Total elapsed minutes (never labelled \"total hours\").'),
+  "count": zod.number(),
+  "staffPersonMinutes": zod.number().describe('Elapsed minutes multiplied by selected staff participants.'),
+  "volunteerPersonMinutes": zod.number(),
+  "contractorRecordedMinutes": zod.number(),
+  "contractorUnknownCount": zod.number().describe('Number of rows whose contractor hours are unknown.'),
+  "unattributedCount": zod.number().describe('Rows recorded as elapsed-only or other-unknown labour.')
+}).and(zod.object({
   "activityTypeId": zod.number(),
   "name": zod.string(),
-  "category": zod.string(),
-  "minutes": zod.number(),
-  "count": zod.number()
-})),
+  "category": zod.string()
+}))),
   "byCategory": zod.array(zod.object({
-  "category": zod.string(),
-  "minutes": zod.number(),
-  "count": zod.number()
-}))
+  "minutes": zod.number().describe('Total elapsed minutes (never labelled \"total hours\").'),
+  "count": zod.number(),
+  "staffPersonMinutes": zod.number().describe('Elapsed minutes multiplied by selected staff participants.'),
+  "volunteerPersonMinutes": zod.number(),
+  "contractorRecordedMinutes": zod.number(),
+  "contractorUnknownCount": zod.number().describe('Number of rows whose contractor hours are unknown.'),
+  "unattributedCount": zod.number().describe('Rows recorded as elapsed-only or other-unknown labour.')
+}).and(zod.object({
+  "category": zod.string()
+})))
 })
 
 

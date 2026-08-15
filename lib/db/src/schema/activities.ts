@@ -20,6 +20,11 @@ export const activityLogsTable = pgTable("activity_logs", {
   namedLocationId: integer("named_location_id").references(() => namedLocationsTable.id),
   activityDate: date("activity_date").notNull(),
   durationMinutes: integer("duration_minutes").notNull(),
+  // Labour accounting: how this row's person-hours should be interpreted.
+  hoursStatus: text("hours_status").notNull().default("elapsed_only"),
+  volunteerCount: integer("volunteer_count"),
+  contractorMinutes: integer("contractor_minutes"),
+  contractorHoursUnknown: boolean("contractor_hours_unknown").notNull().default(false),
   notes: text("notes"),
   recordedByUserId: integer("recorded_by_user_id").notNull().references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

@@ -39,14 +39,52 @@ const activityDateSchema = dateSchema.refine((value) => {
   return value <= limit;
 }, "Activity date cannot be in the future");
 
+export const hoursStatuses = ["staff_participants", "elapsed_only", "contractor_unknown", "other_unknown"] as const;
+export type HoursStatus = (typeof hoursStatuses)[number];
+
 const createSchema = z.object({
   activityTypeId: z.number().int().positive(),
   namedLocationIds: z.array(z.number().int().positive()).max(20).default([]),
   activityDate: activityDateSchema,
   durationMinutes: z.number().int().min(5).max(1440),
   participantUserIds: z.array(z.number().int().positive()).max(50).default([]),
+  hoursStatus: z.enum(hoursStatuses).optional(),
+  volunteerCount: z.number().int().min(0).max(500).optional().nullable(),
+  contractorMinutes: z.number().int().min(0).max(100000).optional().nullable(),
+  contractorHoursUnknown: z.boolean().default(false),
   notes: optionalText(2000),
-}).strict();
+}).strict()
+  .refine((v) => !(v.contractorHoursUnknown && v.contractorMinutes != null),
+    "Contractor hours cannot be both recorded and unknown")
+  .refine((v) => v.participantUserIds.length === 0 || (v.hoursStatus ?? "staff_participants") === "staff_participants",
+    "Selected staff participants imply staff person-hours")
+  // Never silently treat missing labour as zero person-hours: with no staff
+  // selected and no volunteer/contractor labour recorded, the recorder must
+  // say explicitly how the hours should be read.
+  .refine((v) => v.participantUserIds.length > 0 || v.volunteerCount != null || v.contractorMinutes != null
+    || v.contractorHoursUnknown || (v.hoursStatus != null && v.hoursStatus !== "staff_participants"),
+    "Choose how these hours should be counted (no participants were selected)");
+
+/** Derive the stored hours_status from the validated payload. */
+function deriveHoursStatus(v: z.infer<typeof createSchema>): HoursStatus {
+  if (v.participantUserIds.length > 0) return "staff_participants";
+  if (v.hoursStatus && v.hoursStatus !== "staff_participants") return v.hoursStatus;
+  if (v.contractorHoursUnknown) return "contractor_unknown";
+  return "elapsed_only";
+}
+
+/** Person-hour maths shared by list and report responses. */
+function labourFields(row: { durationMinutes: number; hoursStatus: string; volunteerCount: number | null;
+  contractorMinutes: number | null; contractorHoursUnknown: boolean }, participantCount: number) {
+  return {
+    elapsedMinutes: row.durationMinutes,
+    staffPersonMinutes: row.hoursStatus === "staff_participants" ? row.durationMinutes * participantCount : 0,
+    volunteerPersonMinutes: row.volunteerCount != null ? row.durationMinutes * row.volunteerCount : null,
+    contractorMinutes: row.contractorHoursUnknown ? null : row.contractorMinutes,
+    contractorHoursUnknown: row.contractorHoursUnknown,
+    hoursStatus: row.hoursStatus,
+  };
+}
 
 const listQuerySchema = z.object({
   from: dateSchema.optional(),
@@ -164,6 +202,10 @@ router.get("/activities", requireAuth, async (req, res) => {
       activityCategory: activityTypesTable.category,
       activityDate: activityLogsTable.activityDate,
       durationMinutes: activityLogsTable.durationMinutes,
+      hoursStatus: activityLogsTable.hoursStatus,
+      volunteerCount: activityLogsTable.volunteerCount,
+      contractorMinutesRaw: activityLogsTable.contractorMinutes,
+      contractorHoursUnknown: activityLogsTable.contractorHoursUnknown,
       notes: activityLogsTable.notes,
       recordedByUserId: activityLogsTable.recordedByUserId,
       recordedByName: recordedBy.name,
@@ -179,11 +221,15 @@ router.get("/activities", requireAuth, async (req, res) => {
   const ids = rows.map((r) => r.id);
   const [participants, locationMap] = await Promise.all([loadParticipants(ids), loadLocations(ids)]);
   res.json({
-    activities: rows.map((row) => ({
-      ...row,
-      participants: participants.get(row.id) ?? [],
-      locations: locationMap.get(row.id) ?? [],
-    })),
+    activities: rows.map(({ contractorMinutesRaw, ...row }) => {
+      const rowParticipants = participants.get(row.id) ?? [];
+      return {
+        ...row,
+        ...labourFields({ ...row, contractorMinutes: contractorMinutesRaw }, rowParticipants.length),
+        participants: rowParticipants,
+        locations: locationMap.get(row.id) ?? [],
+      };
+    }),
     total: Number(total), page, limit,
   });
 });
@@ -200,38 +246,74 @@ router.get("/activities/report", requireAuth, async (req, res) => {
     ...(from ? [gte(activityLogsTable.activityDate, from)] : []),
     ...(to ? [lte(activityLogsTable.activityDate, to)] : []),
   );
+  // Elapsed minutes and person-minutes are reported side by side and are
+  // never conflated. Staff person-minutes multiply elapsed duration by the
+  // number of SELECTED participants; unknown contractor hours stay unknown.
+  const staffPersonMinutes = sql<number>`sum(CASE WHEN ${activityLogsTable.hoursStatus} = 'staff_participants'
+    THEN ${activityLogsTable.durationMinutes} * (SELECT count(*) FROM activity_log_participants p WHERE p.activity_log_id = ${activityLogsTable.id})
+    ELSE 0 END)`;
+  const volunteerPersonMinutes = sql<number>`sum(CASE WHEN ${activityLogsTable.volunteerCount} IS NOT NULL
+    THEN ${activityLogsTable.durationMinutes} * ${activityLogsTable.volunteerCount} ELSE 0 END)`;
+  const contractorRecordedMinutes = sql<number>`sum(CASE WHEN ${activityLogsTable.contractorHoursUnknown}
+    THEN 0 ELSE coalesce(${activityLogsTable.contractorMinutes}, 0) END)`;
+  const contractorUnknownCount = sql<number>`sum(CASE WHEN ${activityLogsTable.contractorHoursUnknown} THEN 1 ELSE 0 END)`;
+  const unattributedCount = sql<number>`sum(CASE WHEN ${activityLogsTable.hoursStatus} IN ('elapsed_only', 'other_unknown') THEN 1 ELSE 0 END)`;
   const byType = await db.select({
     activityTypeId: activityTypesTable.id,
     name: activityTypesTable.name,
     category: sql<string>`coalesce(${activityTypesTable.category}, 'Other')`,
     minutes: sql<number>`sum(${activityLogsTable.durationMinutes})`,
     count: sql<number>`count(*)`,
+    staffPersonMinutes, volunteerPersonMinutes, contractorRecordedMinutes, contractorUnknownCount, unattributedCount,
   }).from(activityLogsTable)
     .innerJoin(activityTypesTable, eq(activityTypesTable.id, activityLogsTable.activityTypeId))
     .where(where)
     .groupBy(activityTypesTable.id, activityTypesTable.name, activityTypesTable.category)
     .orderBy(desc(sql`sum(${activityLogsTable.durationMinutes})`));
-  const categoryTotals = new Map<string, { minutes: number; count: number }>();
-  let totalMinutes = 0, totalCount = 0;
+  type LabourTotals = { minutes: number; count: number; staffPersonMinutes: number; volunteerPersonMinutes: number;
+    contractorRecordedMinutes: number; contractorUnknownCount: number; unattributedCount: number };
+  const emptyTotals = (): LabourTotals => ({ minutes: 0, count: 0, staffPersonMinutes: 0, volunteerPersonMinutes: 0,
+    contractorRecordedMinutes: 0, contractorUnknownCount: 0, unattributedCount: 0 });
+  const addTo = (t: LabourTotals, r: LabourTotals) => {
+    t.minutes += r.minutes; t.count += r.count; t.staffPersonMinutes += r.staffPersonMinutes;
+    t.volunteerPersonMinutes += r.volunteerPersonMinutes; t.contractorRecordedMinutes += r.contractorRecordedMinutes;
+    t.contractorUnknownCount += r.contractorUnknownCount; t.unattributedCount += r.unattributedCount;
+  };
+  const categoryTotals = new Map<string, LabourTotals>();
+  const grand = emptyTotals();
   const typeRows = byType.map((r) => {
-    const minutes = Number(r.minutes), count = Number(r.count);
-    totalMinutes += minutes; totalCount += count;
-    const cat = categoryTotals.get(r.category) ?? { minutes: 0, count: 0 };
-    cat.minutes += minutes; cat.count += count;
+    const numeric: LabourTotals = {
+      minutes: Number(r.minutes), count: Number(r.count),
+      staffPersonMinutes: Number(r.staffPersonMinutes), volunteerPersonMinutes: Number(r.volunteerPersonMinutes),
+      contractorRecordedMinutes: Number(r.contractorRecordedMinutes),
+      contractorUnknownCount: Number(r.contractorUnknownCount), unattributedCount: Number(r.unattributedCount),
+    };
+    addTo(grand, numeric);
+    const cat = categoryTotals.get(r.category) ?? emptyTotals();
+    addTo(cat, numeric);
     categoryTotals.set(r.category, cat);
-    return { activityTypeId: r.activityTypeId, name: r.name, category: r.category, minutes, count };
+    return { activityTypeId: r.activityTypeId, name: r.name, category: r.category, ...numeric };
   });
   const byCategory = [...categoryTotals.entries()]
-    .map(([category, t]) => ({ category, minutes: t.minutes, count: t.count }))
+    .map(([category, t]) => ({ category, ...t }))
     .sort((a, b) => b.minutes - a.minutes);
-  res.json({ totalMinutes, totalCount, byType: typeRows, byCategory });
+  res.json({
+    totalMinutes: grand.minutes, totalCount: grand.count,
+    totalStaffPersonMinutes: grand.staffPersonMinutes,
+    totalVolunteerPersonMinutes: grand.volunteerPersonMinutes,
+    totalContractorRecordedMinutes: grand.contractorRecordedMinutes,
+    contractorUnknownCount: grand.contractorUnknownCount,
+    unattributedCount: grand.unattributedCount,
+    byType: typeRows, byCategory,
+  });
 });
 
 router.post("/activities", requireAuth, async (req, res) => {
   const parsed = createSchema.safeParse(req.body);
   if (!parsed.success) return validationError(res, parsed.error);
   const propertyId = req.authUser!.propertyId!;
-  const { activityTypeId, namedLocationIds, activityDate, durationMinutes, participantUserIds, notes } = parsed.data;
+  const { activityTypeId, namedLocationIds, activityDate, durationMinutes, participantUserIds, notes,
+    volunteerCount, contractorMinutes, contractorHoursUnknown } = parsed.data;
 
   const [type] = await db.select({ id: activityTypesTable.id }).from(activityTypesTable)
     .where(and(eq(activityTypesTable.id, activityTypeId), eq(activityTypesTable.propertyId, propertyId), eq(activityTypesTable.active, true))).limit(1);
@@ -257,6 +339,10 @@ router.post("/activities", requireAuth, async (req, res) => {
       // Legacy single-location column keeps the first pick for backwards compatibility.
       propertyId, activityTypeId, namedLocationId: uniqueLocations[0] ?? null,
       activityDate, durationMinutes, notes: notes ?? null,
+      hoursStatus: deriveHoursStatus(parsed.data),
+      volunteerCount: volunteerCount ?? null,
+      contractorMinutes: contractorHoursUnknown ? null : contractorMinutes ?? null,
+      contractorHoursUnknown,
       recordedByUserId: req.authUser!.id,
     }).returning();
     if (uniqueLocations.length > 0) {

@@ -5,6 +5,7 @@
  * Blickling Fieldbook API
  * OpenAPI spec version: 0.1.0
  */
+import type { ActivityLogInputHoursStatus } from './activityLogInputHoursStatus';
 
 export interface ActivityLogInput {
   activityTypeId: number;
@@ -22,6 +23,20 @@ export interface ActivityLogInput {
   durationMinutes: number;
   /** @maxItems 50 */
   participantUserIds?: number[];
+  /** Required (non-staff value) when no participants, volunteers or contractor labour are recorded. */
+  hoursStatus?: ActivityLogInputHoursStatus;
+  /**
+     * @minimum 0
+     * @maximum 500
+     * @nullable
+     */
+  volunteerCount?: number | null;
+  /**
+     * @minimum 0
+     * @nullable
+     */
+  contractorMinutes?: number | null;
+  contractorHoursUnknown?: boolean;
   /**
      * @maxLength 2000
      * @nullable

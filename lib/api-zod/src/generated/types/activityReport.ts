@@ -11,6 +11,11 @@ import type { ActivityReportTypeRow } from './activityReportTypeRow';
 export interface ActivityReport {
   totalMinutes: number;
   totalCount: number;
+  totalStaffPersonMinutes: number;
+  totalVolunteerPersonMinutes: number;
+  totalContractorRecordedMinutes: number;
+  contractorUnknownCount: number;
+  unattributedCount: number;
   byType: ActivityReportTypeRow[];
   byCategory: ActivityReportCategoryRow[];
 }

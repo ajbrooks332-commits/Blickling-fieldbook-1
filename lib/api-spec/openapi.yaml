@@ -1427,39 +1427,68 @@ components:
         name:
           type: string
 
-    ActivityReportTypeRow:
+    LabourTotals:
       type: object
-      required: [activityTypeId, name, category, minutes, count]
+      required: [minutes, count, staffPersonMinutes, volunteerPersonMinutes, contractorRecordedMinutes, contractorUnknownCount, unattributedCount]
       properties:
-        activityTypeId:
-          type: integer
-        name:
-          type: string
-        category:
-          type: string
         minutes:
           type: integer
+          description: Total elapsed minutes (never labelled "total hours").
         count:
           type: integer
+        staffPersonMinutes:
+          type: integer
+          description: Elapsed minutes multiplied by selected staff participants.
+        volunteerPersonMinutes:
+          type: integer
+        contractorRecordedMinutes:
+          type: integer
+        contractorUnknownCount:
+          type: integer
+          description: Number of rows whose contractor hours are unknown.
+        unattributedCount:
+          type: integer
+          description: Rows recorded as elapsed-only or other-unknown labour.
+
+    ActivityReportTypeRow:
+      allOf:
+        - $ref: "#/components/schemas/LabourTotals"
+        - type: object
+          required: [activityTypeId, name, category]
+          properties:
+            activityTypeId:
+              type: integer
+            name:
+              type: string
+            category:
+              type: string
 
     ActivityReportCategoryRow:
-      type: object
-      required: [category, minutes, count]
-      properties:
-        category:
-          type: string
-        minutes:
-          type: integer
-        count:
-          type: integer
+      allOf:
+        - $ref: "#/components/schemas/LabourTotals"
+        - type: object
+          required: [category]
+          properties:
+            category:
+              type: string
 
     ActivityReport:
       type: object
-      required: [totalMinutes, totalCount, byType, byCategory]
+      required: [totalMinutes, totalCount, totalStaffPersonMinutes, totalVolunteerPersonMinutes, totalContractorRecordedMinutes, contractorUnknownCount, unattributedCount, byType, byCategory]
       properties:
         totalMinutes:
           type: integer
         totalCount:
+          type: integer
+        totalStaffPersonMinutes:
+          type: integer
+        totalVolunteerPersonMinutes:
+          type: integer
+        totalContractorRecordedMinutes:
+          type: integer
+        contractorUnknownCount:
+          type: integer
+        unattributedCount:
           type: integer
         byType:
           type: array
@@ -1472,7 +1501,7 @@ components:
 
     ActivityLog:
       type: object
-      required: [id, activityTypeId, activityTypeName, activityDate, durationMinutes, recordedByUserId, recordedByName, participants, locations, createdAt]
+      required: [id, activityTypeId, activityTypeName, activityDate, durationMinutes, elapsedMinutes, hoursStatus, staffPersonMinutes, contractorHoursUnknown, recordedByUserId, recordedByName, participants, locations, createdAt]
       properties:
         id:
           type: integer
@@ -1490,6 +1519,22 @@ components:
           type: string
         durationMinutes:
           type: integer
+        elapsedMinutes:
+          type: integer
+          description: Same as durationMinutes; explicit "elapsed" label.
+        hoursStatus:
+          type: string
+          enum: [staff_participants, elapsed_only, contractor_unknown, other_unknown]
+        staffPersonMinutes:
+          type: integer
+        volunteerCount:
+          type: ["integer", "null"]
+        volunteerPersonMinutes:
+          type: ["integer", "null"]
+        contractorMinutes:
+          type: ["integer", "null"]
+        contractorHoursUnknown:
+          type: boolean
         notes:
           type: ["string", "null"]
         recordedByUserId:
@@ -1527,6 +1572,20 @@ components:
           maxItems: 50
           items:
             type: integer
+        hoursStatus:
+          type: string
+          enum: [staff_participants, elapsed_only, contractor_unknown, other_unknown]
+          description: Required (non-staff value) when no participants, volunteers or contractor labour are recorded.
+        volunteerCount:
+          type: ["integer", "null"]
+          minimum: 0
+          maximum: 500
+        contractorMinutes:
+          type: ["integer", "null"]
+          minimum: 0
+        contractorHoursUnknown:
+          type: boolean
+          default: false
         notes:
           type: ["string", "null"]
           maxLength: 2000

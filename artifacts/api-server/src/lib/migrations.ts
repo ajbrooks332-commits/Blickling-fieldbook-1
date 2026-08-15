@@ -374,6 +374,21 @@ const statements = [
     GROUP BY property_id, split_part(reference_number, '-', 2)::int
     ON CONFLICT (property_id, year, kind)
     DO UPDATE SET value = GREATEST(reference_counters.value, EXCLUDED.value)`,
+  // Labour model: keep elapsed duration and person-hours distinguishable.
+  // hours_status records how labour is accounted for; missing labour is never
+  // silently treated as zero person-hours.
+  `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS hours_status text NOT NULL DEFAULT 'elapsed_only'`,
+  `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS volunteer_count integer`,
+  `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS contractor_minutes integer`,
+  `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS contractor_hours_unknown boolean NOT NULL DEFAULT false`,
+  // Backfill: rows with selected participants represent staff labour.
+  `UPDATE activity_logs SET hours_status = 'staff_participants'
+    WHERE hours_status = 'elapsed_only'
+      AND EXISTS (SELECT 1 FROM activity_log_participants p WHERE p.activity_log_id = activity_logs.id)`,
+  `DO $$ BEGIN
+    ALTER TABLE activity_logs ADD CONSTRAINT activity_logs_hours_status_check
+      CHECK (hours_status IN ('staff_participants', 'elapsed_only', 'contractor_unknown', 'other_unknown'));
+  EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
 ];
 
 export async function runMigrations(): Promise<void> {

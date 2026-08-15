@@ -147,14 +147,22 @@ function ReportTab() {
       if (/^[=+\-@\t\r]/.test(s)) s = `'${s}`
       return `"${s.replace(/"/g, '""')}"`
     }
+    const labourCols = (r: { minutes: number; count: number; staffPersonMinutes: number; volunteerPersonMinutes: number; contractorRecordedMinutes: number; contractorUnknownCount: number }) => [
+      r.count, (r.minutes / 60).toFixed(2), (r.staffPersonMinutes / 60).toFixed(2),
+      (r.volunteerPersonMinutes / 60).toFixed(2), (r.contractorRecordedMinutes / 60).toFixed(2),
+      r.contractorUnknownCount > 0 ? esc(`${r.contractorUnknownCount} unknown`) : "0",
+    ]
+    const header = ["Entries", "Elapsed hours", "Staff person-hours", "Volunteer person-hours", "Contractor person-hours (recorded)", "Contractor hours unknown"]
     const lines = [
-      ["Activity", "Category", "Entries", "Hours"].join(","),
-      ...report.byType.map(r => [esc(r.name), esc(r.category), r.count, (r.minutes / 60).toFixed(2)].join(",")),
+      ["Activity", "Category", ...header].join(","),
+      ...report.byType.map(r => [esc(r.name), esc(r.category), ...labourCols(r)].join(",")),
       "",
-      ["Category", "", "Entries", "Hours"].join(","),
-      ...report.byCategory.map(r => [esc(r.category), "", r.count, (r.minutes / 60).toFixed(2)].join(",")),
+      ["Category", "", ...header].join(","),
+      ...report.byCategory.map(r => [esc(r.category), "", ...labourCols(r)].join(",")),
       "",
-      [esc("Total"), "", report.totalCount, (report.totalMinutes / 60).toFixed(2)].join(","),
+      [esc("Total"), "", report.totalCount, (report.totalMinutes / 60).toFixed(2), (report.totalStaffPersonMinutes / 60).toFixed(2),
+        (report.totalVolunteerPersonMinutes / 60).toFixed(2), (report.totalContractorRecordedMinutes / 60).toFixed(2),
+        report.contractorUnknownCount > 0 ? esc(`${report.contractorUnknownCount} unknown`) : "0"].join(","),
     ]
     const blob = new Blob([lines.join("\n")], { type: "text/csv;charset=utf-8" })
     const url = URL.createObjectURL(blob)
@@ -198,27 +206,42 @@ function ReportTab() {
           <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap" }}>
             <div style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: "12px 14px" }}>
               <div style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.emerald }}>{formatHours(report.totalMinutes)}h</div>
-              <div style={{ fontSize: 12, color: C.muted }}>Total hours</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Elapsed hours</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: "12px 14px" }}>
+              <div style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.blue }}>{formatHours(report.totalStaffPersonMinutes)}h</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Staff person-hours</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: "12px 14px" }}>
+              <div style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>{formatHours(report.totalVolunteerPersonMinutes)}h</div>
+              <div style={{ fontSize: 12, color: C.muted }}>Volunteer person-hours</div>
             </div>
             <div style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: "12px 14px" }}>
               <div style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>{report.totalCount}</div>
               <div style={{ fontSize: 12, color: C.muted }}>Entries</div>
             </div>
-            <div style={{ flex: 1, minWidth: 130, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: "12px 14px" }}>
-              <div style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.blue }}>{report.byCategory.length}</div>
-              <div style={{ fontSize: 12, color: C.muted }}>Categories</div>
-            </div>
           </div>
+          {(report.contractorUnknownCount > 0 || report.totalContractorRecordedMinutes > 0) && (
+            <p style={{ fontSize: 12, color: C.muted, margin: "0 0 16px" }}>
+              Contractor person-hours (recorded): {formatHours(report.totalContractorRecordedMinutes)}h
+              {report.contractorUnknownCount > 0 && ` · ${report.contractorUnknownCount} ${report.contractorUnknownCount === 1 ? "entry" : "entries"} with contractor hours unknown`}
+            </p>
+          )}
+          {report.unattributedCount > 0 && (
+            <p style={{ fontSize: 12, color: C.dim, margin: "0 0 16px" }}>
+              {report.unattributedCount} {report.unattributedCount === 1 ? "entry has" : "entries have"} elapsed time only — no person-hours attributed.
+            </p>
+          )}
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.875rem", padding: 16, marginBottom: 16 }}>
-            <h3 style={{ ...HEAD, fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 12px" }}>Hours by category</h3>
+            <h3 style={{ ...HEAD, fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 12px" }}>Elapsed hours by category</h3>
             {report.byCategory.map(r => (
               <BarRow key={r.category} label={r.category} sub={`${r.count} ${r.count === 1 ? "entry" : "entries"}`} minutes={r.minutes} max={maxCat} colour={C.blue} />
             ))}
           </div>
 
           <div style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.875rem", padding: 16 }}>
-            <h3 style={{ ...HEAD, fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 12px" }}>Hours by activity</h3>
+            <h3 style={{ ...HEAD, fontSize: 14, fontWeight: 700, color: C.text, margin: "0 0 12px" }}>Elapsed hours by activity</h3>
             {report.byType.map(r => (
               <BarRow key={r.activityTypeId} label={r.name} sub={r.category} minutes={r.minutes} max={maxType} colour={C.emerald} />
             ))}
@@ -243,6 +266,10 @@ export default function Activities() {
   const [typeId, setTypeId] = useState<number | null>(null)
   const [locationIds, setLocationIds] = useState<number[]>([])
   const [participants, setParticipants] = useState<number[]>([])
+  const [volunteerCount, setVolunteerCount] = useState("")
+  const [contractorChoice, setContractorChoice] = useState<"none" | "recorded" | "unknown">("none")
+  const [contractorHours, setContractorHours] = useState("")
+  const [noStaffReason, setNoStaffReason] = useState<"" | "elapsed_only" | "other_unknown">("")
   const [duration, setDuration] = useState<number | null>(null)
   const [customDuration, setCustomDuration] = useState(false)
   const [customHours, setCustomHours] = useState("")
@@ -265,6 +292,7 @@ export default function Activities() {
     invalidate()
     setTypeId(null); setLocationIds([]); setParticipants([]); setDuration(null)
     setCustomDuration(false); setCustomHours(""); setNotes(""); setError(null)
+    setVolunteerCount(""); setContractorChoice("none"); setContractorHours(""); setNoStaffReason("")
     setSaved(true); window.setTimeout(() => setSaved(false), 2500)
   }, onError: () => setError("Could not save the activity. Please try again.") } })
   const deleteActivity = useDeleteActivity({ mutation: { onSuccess: invalidate } })
@@ -307,9 +335,25 @@ export default function Activities() {
     createLocation.mutate({ data: { name } })
   }
 
+  const volunteers = volunteerCount.trim() === "" ? null : Number(volunteerCount)
+  const contractorMinutes = contractorChoice === "recorded" && contractorHours.trim() !== ""
+    ? Math.round(Number(contractorHours) * 60) : null
+  // With no staff selected and no volunteer/contractor labour, the recorder
+  // must say explicitly how the hours should be counted.
+  const needsHoursChoice = participants.length === 0 && volunteers == null
+    && contractorChoice === "none"
+
   const submit = () => {
     if (!canSave) {
       setError(typeId == null ? "Pick an activity first" : "Pick how long it took")
+      return
+    }
+    if (needsHoursChoice && !noStaffReason) {
+      setError("No one was selected — choose how these hours should be counted.")
+      return
+    }
+    if (contractorChoice === "recorded" && contractorMinutes == null) {
+      setError("Enter the contractor hours, or mark them as unknown.")
       return
     }
     setError(null)
@@ -319,6 +363,10 @@ export default function Activities() {
       activityDate,
       durationMinutes: effectiveDuration!,
       participantUserIds: participants,
+      ...(volunteers != null ? { volunteerCount: volunteers } : {}),
+      ...(contractorMinutes != null ? { contractorMinutes } : {}),
+      contractorHoursUnknown: contractorChoice === "unknown",
+      ...(participants.length === 0 ? { hoursStatus: noStaffReason || (contractorChoice === "unknown" ? "contractor_unknown" : "elapsed_only") } : {}),
       notes: notes.trim() ? notes.trim() : null,
     } })
   }
@@ -455,7 +503,49 @@ export default function Activities() {
               </Chip>
             ))}
           </div>
+          <p style={{ fontSize: 11, color: C.dim, margin: "6px 0 0" }}>
+            Staff person-hours = duration × selected people. You are not counted unless you select yourself.
+          </p>
         </div>
+
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginBottom: 14 }}>
+          <div>
+            <label style={labelStyle}>Volunteers (optional)</label>
+            <input
+              type="number" inputMode="numeric" min={0} max={500} placeholder="How many?"
+              value={volunteerCount} onChange={e => setVolunteerCount(e.target.value)}
+              style={{ ...inputStyle, width: 120 }}
+            />
+          </div>
+          <div>
+            <label style={labelStyle}>Contractor</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Chip selected={contractorChoice === "none"} onClick={() => setContractorChoice("none")}>None</Chip>
+              <Chip selected={contractorChoice === "recorded"} onClick={() => setContractorChoice("recorded")}>Hours known</Chip>
+              <Chip selected={contractorChoice === "unknown"} onClick={() => setContractorChoice("unknown")}>Hours unknown</Chip>
+            </div>
+            {contractorChoice === "recorded" && (
+              <input
+                type="number" inputMode="decimal" min={0} step={0.25} placeholder="Contractor hours"
+                value={contractorHours} onChange={e => setContractorHours(e.target.value)}
+                style={{ ...inputStyle, marginTop: 8, width: 160 }}
+              />
+            )}
+          </div>
+        </div>
+
+        {needsHoursChoice && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={labelStyle}>Hours status — how should these hours be counted?</label>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <Chip selected={noStaffReason === "elapsed_only"} onClick={() => setNoStaffReason(noStaffReason === "elapsed_only" ? "" : "elapsed_only")}>Elapsed time only</Chip>
+              <Chip selected={noStaffReason === "other_unknown"} onClick={() => setNoStaffReason(noStaffReason === "other_unknown" ? "" : "other_unknown")}>Labour unknown</Chip>
+            </div>
+            <p style={{ fontSize: 11, color: C.dim, margin: "6px 0 0" }}>
+              No participants selected — these hours will not be counted as person-hours.
+            </p>
+          </div>
+        )}
 
         <div style={{ marginBottom: 14 }}>
           <label style={labelStyle}><Clock size={12} style={{ verticalAlign: "-2px", marginRight: 4 }} />How long?</label>
@@ -532,7 +622,22 @@ export default function Activities() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
                     <span style={{ ...HEAD, fontSize: 14, fontWeight: 700, color: C.text }}>{a.activityTypeName}</span>
-                    <span style={{ background: C.emeraldTint, color: C.emerald, borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{formatDuration(a.durationMinutes)}</span>
+                    <span style={{ background: C.emeraldTint, color: C.emerald, borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{formatDuration(a.durationMinutes)} elapsed</span>
+                    {a.hoursStatus === "staff_participants" && a.staffPersonMinutes > 0 && (
+                      <span style={{ background: C.blueTint, color: C.blue, borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{formatHours(a.staffPersonMinutes)}h staff</span>
+                    )}
+                    {a.volunteerPersonMinutes != null && a.volunteerPersonMinutes > 0 && (
+                      <span style={{ background: C.blueTint, color: C.blue, borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{formatHours(a.volunteerPersonMinutes)}h volunteer</span>
+                    )}
+                    {a.contractorHoursUnknown && (
+                      <span style={{ background: C.border, color: C.muted, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>Contractor hours unknown</span>
+                    )}
+                    {a.contractorMinutes != null && a.contractorMinutes > 0 && (
+                      <span style={{ background: C.blueTint, color: C.blue, borderRadius: 999, padding: "2px 9px", fontSize: 12, fontWeight: 600 }}>{formatHours(a.contractorMinutes)}h contractor</span>
+                    )}
+                    {(a.hoursStatus === "elapsed_only" || a.hoursStatus === "other_unknown") && (
+                      <span style={{ color: C.dim, fontSize: 11 }}>{a.hoursStatus === "elapsed_only" ? "Elapsed time only" : "Labour unknown"}</span>
+                    )}
                     {a.activityCategory && <span style={{ background: C.blueTint, color: C.blue, borderRadius: 999, padding: "2px 9px", fontSize: 11, fontWeight: 600 }}>{a.activityCategory}</span>}
                   </div>
                   <div style={{ color: C.muted, fontSize: 13, marginTop: 4, display: "flex", flexWrap: "wrap", gap: "4px 12px" }}>

@@ -5,9 +5,8 @@
  * Blickling Fieldbook API
  * OpenAPI spec version: 0.1.0
  */
+import type { LabourTotals } from './labourTotals';
 
-export interface ActivityReportCategoryRow {
+export type ActivityReportCategoryRow = LabourTotals & {
   category: string;
-  minutes: number;
-  count: number;
-}
+};

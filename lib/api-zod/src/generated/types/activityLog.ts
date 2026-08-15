@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActivityLocation } from './activityLocation';
+import type { ActivityLogHoursStatus } from './activityLogHoursStatus';
 import type { ActivityParticipant } from './activityParticipant';
 
 export interface ActivityLog {
@@ -17,6 +18,17 @@ export interface ActivityLog {
   locations: ActivityLocation[];
   activityDate: string;
   durationMinutes: number;
+  /** Same as durationMinutes; explicit "elapsed" label. */
+  elapsedMinutes: number;
+  hoursStatus: ActivityLogHoursStatus;
+  staffPersonMinutes: number;
+  /** @nullable */
+  volunteerCount?: number | null;
+  /** @nullable */
+  volunteerPersonMinutes?: number | null;
+  /** @nullable */
+  contractorMinutes?: number | null;
+  contractorHoursUnknown: boolean;
   /** @nullable */
   notes?: string | null;
   recordedByUserId: number;
