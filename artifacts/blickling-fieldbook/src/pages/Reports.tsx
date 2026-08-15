@@ -153,10 +153,12 @@ export default function Reports() {
       {/* Metric tiles */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {[
-          { label: "New Observations", value: summary.newObservations, color: C.blue, icon: TrendingUp },
-          { label: "Actions Completed", value: summary.actionsCompleted, color: C.emerald, icon: CheckCircle2 },
-          { label: "Overdue Actions", value: summary.overdueActions, color: C.urgent, icon: AlertTriangle },
-          { label: "Urgent / High", value: (summary.urgentItems || 0) + (summary.highItems || 0), color: C.high, icon: AlertTriangle },
+          // "In period" figures are judged by when things were observed;
+          // "current" figures are today's backlog regardless of the period.
+          { label: "Observed in Period", value: summary.newObservations, color: C.blue, icon: TrendingUp },
+          { label: "Actions Completed in Period", value: summary.actionsCompleted, color: C.emerald, icon: CheckCircle2 },
+          { label: "Overdue Actions (current)", value: summary.overdueActions, color: C.urgent, icon: AlertTriangle },
+          { label: "Urgent / High (current)", value: (summary.urgentItems || 0) + (summary.highItems || 0), color: C.high, icon: AlertTriangle },
         ].map(({ label, value, color, icon: Icon }) => (
           <div
             key={label}
@@ -224,7 +226,7 @@ export default function Reports() {
             >
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5" style={{ color: C.urgent }} />
-                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Safety Issues</span>
+                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Safety Issues (current)</span>
               </div>
               <span style={{ ...HEAD, fontSize: 24, fontWeight: 700, color: C.urgent }}>
                 {summary.outstandingSafetyIssues || 0}
@@ -239,7 +241,7 @@ export default function Reports() {
             >
               <div className="flex items-center gap-3">
                 <AlertTriangle className="w-5 h-5" style={{ color: C.high }} />
-                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Access Issues</span>
+                <span style={{ ...BODY, fontSize: 13, fontWeight: 500, color: C.text }}>Outstanding Access Issues (current)</span>
               </div>
               <span style={{ ...HEAD, fontSize: 24, fontWeight: 700, color: C.high }}>
                 {summary.outstandingAccessIssues || 0}

@@ -279,6 +279,23 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       assert.equal(reportBody.contractorUnknownCount, 1);
       assert.equal(reportBody.unattributedCount, 1);
 
+      // --- Regression: report periods judged by observedAt, not createdAt ---
+      const backObs = await mutate("/api/observations", "POST", {
+        title: "Backdated observation", categoryId: categories[0].id, priority: "normal",
+        status: "submitted", observedAt: "2020-06-15T10:00:00.000Z",
+      });
+      assert.equal(backObs.status, 201);
+      const backSummary = await fetch(`${origin}/api/reports/summary?dateFrom=2020-06-01&dateTo=2020-06-30`, { headers: { Cookie: cookie } });
+      assert.equal(backSummary.status, 200);
+      const backSummaryBody = await backSummary.json() as { newObservations: number };
+      assert.equal(backSummaryBody.newObservations, 1);
+      // Historical export beyond 366 days must not be blocked.
+      const longExport = await fetch(`${origin}/api/reports/export.csv?dateFrom=2019-01-01&dateTo=2026-12-31`, { headers: { Cookie: cookie } });
+      assert.equal(longExport.status, 200);
+      const longCsv = await longExport.text();
+      assert.ok(longCsv.includes("Backdated observation"));
+      assert.ok(longCsv.includes("Created at"), "process timestamps retained in export");
+
       const archive = await mutate(`/api/observations/${observation.id}`, "DELETE");
       assert.equal(archive.status, 204);
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });

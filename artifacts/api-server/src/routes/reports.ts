@@ -6,15 +6,23 @@ import { requireAuth, requireRole } from "../lib/auth";
 import { validationError } from "../lib/validation";
 
 const router = Router();
-const rangeSchema = z.object({ dateFrom: z.string().date(), dateTo: z.string().date() })
-  .refine((value) => value.dateFrom <= value.dateTo, { message: "dateFrom must be on or before dateTo" })
+const baseRange = z.object({ dateFrom: z.string().date(), dateTo: z.string().date() })
+  .refine((value) => value.dateFrom <= value.dateTo, { message: "dateFrom must be on or before dateTo" });
+const rangeSchema = baseRange
   .refine((value) => Date.parse(`${value.dateTo}T00:00:00Z`) - Date.parse(`${value.dateFrom}T00:00:00Z`) <= 366 * 86_400_000,
     { message: "Report ranges cannot exceed 366 days" });
+// Historical exports must not be blocked by the summary cap; a generous
+// safety limit still bounds the query.
+const exportRangeSchema = baseRange
+  .refine((value) => Date.parse(`${value.dateTo}T00:00:00Z`) - Date.parse(`${value.dateFrom}T00:00:00Z`) <= 20 * 366 * 86_400_000,
+    { message: "Export ranges cannot exceed 20 years" });
 
 async function summary(propertyId: number, dateFrom: string, dateTo: string) {
   const obsBase = [eq(observationsTable.propertyId, propertyId), isNull(observationsTable.deletedAt)];
   const actionBase = [eq(actionsTable.propertyId, propertyId), isNull(actionsTable.deletedAt)];
-  const obsPeriod = [sql`${observationsTable.createdAt} >= ${dateFrom}::date`, sql`${observationsTable.createdAt} < (${dateTo}::date + interval '1 day')`];
+  // Period membership is judged by when the thing was OBSERVED in the field,
+  // not when the record happened to be entered or synced.
+  const obsPeriod = [sql`${observationsTable.observedAt} >= ${dateFrom}::date`, sql`${observationsTable.observedAt} < (${dateTo}::date + interval '1 day')`];
   const actionPeriod = [sql`${actionsTable.createdAt} >= ${dateFrom}::date`, sql`${actionsTable.createdAt} < (${dateTo}::date + interval '1 day')`];
   const activeObs = sql`${observationsTable.status} NOT IN ('resolved', 'closed', 'cancelled')`;
   const [newObs, resolved, actionCreated, completed, overdue, urgent, high, safety, access, byCategory, byLocation] = await Promise.all([
@@ -59,21 +67,24 @@ const csvCell = (value: unknown) => {
 };
 
 router.get("/export.csv", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
-  const parsed = rangeSchema.safeParse(req.query);
+  const parsed = exportRangeSchema.safeParse(req.query);
   if (!parsed.success) return validationError(res, parsed.error);
   const propertyId = req.authUser!.propertyId!;
-  const rows = await db.select({ reference: observationsTable.referenceNumber, title: observationsTable.title,
+  // Range selection uses observedAt (field reality); process timestamps
+  // (created/updated) are retained as separate columns.
+  const rows = await db.select({ id: observationsTable.id, reference: observationsTable.referenceNumber, title: observationsTable.title,
     category: categoriesTable.name, location: namedLocationsTable.name, priority: observationsTable.priority,
     status: observationsTable.status, observedAt: observationsTable.observedAt, reporter: usersTable.name,
-    safetyIssue: observationsTable.safetyIssue, publicAccessAffected: observationsTable.publicAccessAffected })
+    safetyIssue: observationsTable.safetyIssue, publicAccessAffected: observationsTable.publicAccessAffected,
+    createdAt: observationsTable.createdAt, updatedAt: observationsTable.updatedAt })
     .from(observationsTable).leftJoin(categoriesTable, eq(observationsTable.categoryId, categoriesTable.id))
     .leftJoin(namedLocationsTable, eq(observationsTable.namedLocationId, namedLocationsTable.id))
     .leftJoin(usersTable, eq(observationsTable.reportedByUserId, usersTable.id))
     .where(and(eq(observationsTable.propertyId, propertyId), isNull(observationsTable.deletedAt),
-      sql`${observationsTable.createdAt} >= ${parsed.data.dateFrom}::date`,
-      sql`${observationsTable.createdAt} < (${parsed.data.dateTo}::date + interval '1 day')`))
-    .orderBy(observationsTable.createdAt);
-  const headers = ["Reference", "Title", "Category", "Location", "Priority", "Status", "Observed at", "Reported by", "Safety issue", "Access affected"];
+      sql`${observationsTable.observedAt} >= ${parsed.data.dateFrom}::date`,
+      sql`${observationsTable.observedAt} < (${parsed.data.dateTo}::date + interval '1 day')`))
+    .orderBy(observationsTable.observedAt);
+  const headers = ["ID", "Reference", "Title", "Category", "Location", "Priority", "Status", "Observed at", "Reported by", "Safety issue", "Access affected", "Created at", "Updated at"];
   const csv = [headers, ...rows.map((row) => Object.values(row))].map((row) => row.map(csvCell).join(",")).join("\r\n");
   res.setHeader("Content-Type", "text/csv; charset=utf-8");
   res.setHeader("Content-Disposition", `attachment; filename="blickling-fieldbook-${parsed.data.dateFrom}-${parsed.data.dateTo}.csv"`);
