@@ -8,6 +8,8 @@ import { apiJson } from "./api";
 const STORE_VERSION = 1;
 const DATASET = "dataset";
 const META = "meta";
+const PHOTOS = "photos";
+const PRIVATE_CACHE = "fieldbook-private-v1";
 
 export const OFFLINE_COLLECTIONS = [
   "categories", "locations", "activityTypes", "users", "observations",
@@ -29,11 +31,12 @@ const dbName = (userId: number, propertyId: number) => `blickling-fieldbook-data
 
 function openStore(userId: number, propertyId: number): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(dbName(userId, propertyId), 1);
+    const request = indexedDB.open(dbName(userId, propertyId), 2);
     request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains(DATASET)) db.createObjectStore(DATASET);
       if (!db.objectStoreNames.contains(META)) db.createObjectStore(META);
+      if (!db.objectStoreNames.contains(PHOTOS)) db.createObjectStore(PHOTOS);
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error);
@@ -80,8 +83,61 @@ interface Snapshot {
   [collection: string]: unknown;
 }
 
+/** Downscale an image blob to a compressed thumbnail (~320px long edge). */
+async function makeThumbnail(blob: Blob): Promise<Blob | null> {
+  try {
+    const bitmap = await createImageBitmap(blob);
+    const scale = Math.min(1, 320 / Math.max(bitmap.width, bitmap.height));
+    const width = Math.max(1, Math.round(bitmap.width * scale));
+    const height = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = width; canvas.height = height;
+    canvas.getContext("2d")?.drawImage(bitmap, 0, 0, width, height);
+    bitmap.close();
+    return await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.7));
+  } catch { return null; }
+}
+
+/**
+ * Preload compressed thumbnails for structured-record photos, and optionally
+ * full-resolution copies for current/open records (explicit opt-in only —
+ * historic full-resolution images are never bulk-fetched).
+ */
+async function preloadPhotos(userId: number, propertyId: number, snapshot: Snapshot, includeFullRes: boolean): Promise<number> {
+  const images = (snapshot.observationImages ?? []) as Array<Record<string, unknown>>;
+  const observations = (snapshot.observations ?? []) as Array<Record<string, unknown>>;
+  const openObservationIds = new Set(observations.filter((o) => o.status !== "closed").map((o) => o.id as number));
+  let stored = 0;
+  const cache = includeFullRes && "caches" in window ? await window.caches.open(PRIVATE_CACHE) : null;
+  for (const image of images) {
+    const storageKey = String(image.storageKey ?? "");
+    if (!storageKey.startsWith("/objects/")) continue;
+    const url = `/api/storage${storageKey}`;
+    try {
+      const existing = await withStore<Blob | undefined>(userId, propertyId, PHOTOS, "readonly", (store) => store.get(storageKey));
+      const wantFull = cache && openObservationIds.has(image.observationId as number);
+      if (existing && !wantFull) { stored += 1; continue; }
+      const response = await fetch(url, { credentials: "same-origin", headers: { "X-Requested-With": "BlicklingFieldbook" } });
+      if (!response.ok) continue;
+      if (wantFull) await cache!.put(url, response.clone());
+      if (!existing) {
+        const thumbnail = await makeThumbnail(await response.blob());
+        if (thumbnail) await withStore(userId, propertyId, PHOTOS, "readwrite", (store) => store.put(thumbnail, storageKey));
+      }
+      stored += 1;
+    } catch { /* photo failures never fail the structured preload */ }
+  }
+  return stored;
+}
+
+export async function readOfflineThumbnail(userId: number, propertyId: number, storageKey: string): Promise<Blob | null> {
+  try {
+    return (await withStore<Blob | undefined>(userId, propertyId, PHOTOS, "readonly", (store) => store.get(storageKey))) ?? null;
+  } catch { return null; }
+}
+
 /** Deliberate preload: fetch the whole active dataset and store it locally. */
-export async function preloadOfflineData(userId: number, propertyId: number): Promise<OfflineMeta> {
+export async function preloadOfflineData(userId: number, propertyId: number, options?: { fullResOpenRecords?: boolean }): Promise<OfflineMeta> {
   const snapshot = await apiJson<Snapshot>("/api/offline/snapshot");
   const counts: Record<string, number> = {};
   for (const collection of OFFLINE_COLLECTIONS) {
@@ -89,6 +145,7 @@ export async function preloadOfflineData(userId: number, propertyId: number): Pr
     await withStore(userId, propertyId, DATASET, "readwrite", (store) => store.put(rows, collection));
     counts[collection] = rows.length;
   }
+  counts.photoThumbnails = await preloadPhotos(userId, propertyId, snapshot, options?.fullResOpenRecords ?? false);
   const previous = await getOfflineMeta(userId, propertyId);
   const meta: OfflineMeta = {
     lastSyncAt: new Date().toISOString(),

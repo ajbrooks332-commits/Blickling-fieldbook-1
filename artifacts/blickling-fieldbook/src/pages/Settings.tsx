@@ -20,6 +20,7 @@ export default function Settings({ forcePasswordChange = false }: { forcePasswor
   const [offlineMeta, setOfflineMeta] = useState<OfflineMeta | null>(null);
   const [usage, setUsage] = useState<{ usage: number; quota: number } | null>(null);
   const [preloading, setPreloading] = useState(false);
+  const [fullResPhotos, setFullResPhotos] = useState(false);
   const [offlineMessage, setOfflineMessage] = useState<string | null>(null);
   const propertyId = (user as { propertyId?: number } | undefined)?.propertyId ?? 0;
   const refreshOffline = async () => {
@@ -85,11 +86,15 @@ export default function Settings({ forcePasswordChange = false }: { forcePasswor
         {usage && <p className="text-xs text-muted-foreground">Local storage: ~{(usage.usage / 1_048_576).toFixed(1)} MB used of {(usage.quota / 1_048_576).toFixed(0)} MB available{usage.quota > 0 && usage.usage / usage.quota > 0.8 ? " — storage is nearly full; clear space or offline data may be evicted." : ""}</p>}
       </div> : <p className="text-sm text-muted-foreground">No offline dataset downloaded yet on this device.</p>}
       {offlineMessage && <p role="status" className="text-sm">{offlineMessage}</p>}
+      <label className="flex items-start gap-2 text-sm">
+        <input type="checkbox" className="mt-0.5" checked={fullResPhotos} onChange={(e) => setFullResPhotos(e.target.checked)} />
+        <span>Also download full-resolution photos for current/open records (uses more storage). Thumbnails are always included; historic full-resolution photos are never bulk-downloaded.</span>
+      </label>
       <div className="flex flex-wrap gap-2">
         <button type="button" disabled={preloading || !navigator.onLine || !user} onClick={async () => {
           if (!user) return;
           setPreloading(true); setOfflineMessage(null);
-          try { await preloadOfflineData(user.id, propertyId); setOfflineMessage("Offline dataset downloaded — ready for offline use."); await refreshOffline(); }
+          try { await preloadOfflineData(user.id, propertyId, { fullResOpenRecords: fullResPhotos }); setOfflineMessage("Offline dataset downloaded — ready for offline use."); await refreshOffline(); }
           catch { setOfflineMessage("Could not download the offline dataset. Check your connection and try again."); }
           finally { setPreloading(false); }
         }} className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 disabled:opacity-50">
