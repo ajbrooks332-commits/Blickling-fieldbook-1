@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { Route, Switch, Router as WouterRouter, useLocation } from "wouter";
 import { getGetMeQueryKey, getGetSetupStatusQueryKey, useGetMe, useGetSetupStatus, type AuthUser } from "@workspace/api-client-react";
+import { clearOfflineAccount, setOfflineAccount } from "@/lib/offlineFallback";
 import { lazy, Suspense, useEffect } from "react";
 import { Loader2, ShieldX } from "lucide-react";
 import AppShell from "@/layouts/AppShell";
@@ -83,6 +84,12 @@ function AuthRouter() {
     if (!isLoading && user && (location === "/login" || location === "/setup")) setLocation("/");
     if (!isLoading && !user && !error && location !== "/login") setLocation("/login");
   }, [isLoading, user, error, location, setLocation]);
+  // Bind the offline read fallback to the signed-in account so cached estate
+  // data is only ever served to the account that downloaded it.
+  useEffect(() => {
+    if (user) setOfflineAccount(user.id, (user as { propertyId?: number | null }).propertyId ?? 0);
+    else clearOfflineAccount();
+  }, [user?.id]);
   if (isLoading) return <Loading />;
   if (error || !user) return <Login />;
   return <AuthenticatedRoutes user={user} />;

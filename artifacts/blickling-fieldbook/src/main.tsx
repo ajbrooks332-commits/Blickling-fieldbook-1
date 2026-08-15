@@ -4,6 +4,9 @@ import App from './App';
 
 import './index.css';
 import { initialiseOfflineSync } from './lib/offline';
+import { initialiseOfflineFallback } from './lib/offlineFallback';
+
+initialiseOfflineFallback();
 
 createRoot(document.getElementById('root')!).render(<App />);
 

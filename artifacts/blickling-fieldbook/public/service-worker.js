@@ -113,12 +113,15 @@ async function syncOutboxInWorker() {
   let synced = 0;
   for (const record of records.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     if (record.ownerUserId !== currentUser.id) continue;
+    if (record.quarantined) continue; // parked until the user fixes/retries/discards it
     try {
       if (record.kind === "observation") {
         const created = await apiJson("/api/observations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
         for (const photo of record.photos || []) await uploadQueuedPhoto("observations", created.id, photo);
       } else if (record.kind === "action") {
         await apiJson("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
+      } else if (record.kind === "activity") {
+        await apiJson("/api/activities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
       } else if (record.kind === "status" && record.entityType && record.entityId) {
         await apiJson(`/api/${record.entityType}/${record.entityId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(record.payload) });
@@ -129,11 +132,14 @@ async function syncOutboxInWorker() {
       }
       await outboxOperation("readwrite", (store) => store.delete(record.id)); synced += 1;
     } catch (error) {
-      if (error?.status && error.status < 500) {
+      if (error?.status && error.status >= 400 && error.status < 500) {
+        // Terminal for this item: quarantine and CONTINUE with later work.
         record.lastError = error.message;
+        record.quarantined = true;
         await outboxOperation("readwrite", (store) => store.put(record));
+        continue;
       }
-      break;
+      break; // network/server failure — stop for now, retry later
     }
   }
   const clients = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

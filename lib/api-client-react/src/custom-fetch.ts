@@ -30,6 +30,16 @@ export function setBaseUrl(url: string | null): void {
 }
 
 /**
+ * Handler that may serve a GET request from local offline data when the
+ * network is unavailable. Return null to signal "no offline answer".
+ */
+export type OfflineFallback = (url: string) => Promise<Response | null>;
+let _offlineFallback: OfflineFallback | null = null;
+export function setOfflineFallback(handler: OfflineFallback | null): void {
+  _offlineFallback = handler;
+}
+
+/**
  * Register a getter that supplies a bearer auth token.  Before every fetch
  * the getter is invoked; when it returns a non-null string, an
  * `Authorization: Bearer <token>` header is attached to the request.
@@ -363,7 +373,18 @@ export async function customFetch<T = unknown>(
 
   const requestInfo = { method, url: resolveUrl(input) };
 
-  const response = await fetch(input, { credentials: "same-origin", ...init, method, headers });
+  let response: Response;
+  try {
+    response = await fetch(input, { credentials: "same-origin", ...init, method, headers });
+  } catch (error) {
+    // Network failure: give the app a chance to serve GET requests from its
+    // structured offline store (see setOfflineFallback).
+    if (method === "GET" && _offlineFallback) {
+      const fallback = await _offlineFallback(requestInfo.url).catch(() => null);
+      if (fallback) return (await parseSuccessBody(fallback, responseType, requestInfo)) as T;
+    }
+    throw error;
+  }
 
   if (!response.ok) {
     const errorData = await parseErrorBody(response, method);
