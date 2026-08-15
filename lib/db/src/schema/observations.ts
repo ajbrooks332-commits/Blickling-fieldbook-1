@@ -34,6 +34,8 @@ export const observationsTable = pgTable("observations", {
   createdOffline: boolean("created_offline").notNull().default(false),
   offlineId: text("offline_id"),
   syncedAt: timestamp("synced_at"),
+  // When the device originally captured the record (may predate created_at).
+  deviceCreatedAt: timestamp("device_created_at"),
   resolvedAt: timestamp("resolved_at"),
   closedAt: timestamp("closed_at"),
   deletedAt: timestamp("deleted_at"),

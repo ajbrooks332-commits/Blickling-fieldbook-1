@@ -22,8 +22,9 @@ const createSchema = z.object({
   equipmentRequired: z.boolean().default(false), contractorRequired: z.boolean().default(false),
   notes: z.string().trim().max(5000).optional().nullable(),
   createdOffline: z.boolean().default(false), offlineId: z.string().uuid().optional().nullable(),
+  deviceCreatedAt: z.string().datetime({ offset: true }).optional().nullable(),
 }).strict();
-const updateSchema = createSchema.omit({ status: true, notes: true, createdOffline: true, offlineId: true }).partial().strict();
+const updateSchema = createSchema.omit({ status: true, notes: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial().strict();
 
 const actionFields = {
   id: actionsTable.id, referenceNumber: actionsTable.referenceNumber, title: actionsTable.title,
@@ -155,6 +156,7 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
       equipmentRequired: parsed.data.equipmentRequired, contractorRequired: parsed.data.contractorRequired,
       createdOffline: parsed.data.createdOffline, offlineId: parsed.data.offlineId ?? null,
       syncedAt: parsed.data.createdOffline ? new Date() : null,
+      deviceCreatedAt: parsed.data.deviceCreatedAt ? new Date(parsed.data.deviceCreatedAt) : null,
     }).returning();
     if (created.observationId) {
       const [observation] = await tx.select({ status: observationsTable.status }).from(observationsTable)

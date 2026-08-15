@@ -27,11 +27,12 @@ const observationBase = z.object({
   machineryRequired: z.boolean().default(false), specialistRequired: z.boolean().default(false),
   followUpRequired: z.boolean().default(false), createdOffline: z.boolean().default(false),
   offlineId: z.string().uuid().optional().nullable(),
+  deviceCreatedAt: z.string().datetime({ offset: true }).optional().nullable(),
 }).strict();
 const createSchema = observationBase.refine((value) => (value.latitude == null) === (value.longitude == null), {
   message: "Latitude and longitude must be supplied together",
 });
-const updateSchema = observationBase.omit({ status: true, createdOffline: true, offlineId: true }).partial().strict()
+const updateSchema = observationBase.omit({ status: true, createdOffline: true, offlineId: true, deviceCreatedAt: true }).partial().strict()
   .refine((value) => {
     if (value.latitude === undefined && value.longitude === undefined) return true;
     return (value.latitude == null) === (value.longitude == null);
@@ -121,6 +122,7 @@ router.post("/", requireAuth, async (req, res) => {
       latitude: parsed.data.latitude ?? null, longitude: parsed.data.longitude ?? null,
       gpsAccuracyMetres: parsed.data.gpsAccuracyMetres ?? null, offlineId: parsed.data.offlineId ?? null,
       syncedAt: parsed.data.createdOffline ? new Date() : null, observedAt: new Date(parsed.data.observedAt),
+      deviceCreatedAt: parsed.data.deviceCreatedAt ? new Date(parsed.data.deviceCreatedAt) : null,
       propertyId: user.propertyId!, referenceNumber, reportedByUserId: user.id,
     }).returning();
     await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, observationId: row.id, userId: user.id,

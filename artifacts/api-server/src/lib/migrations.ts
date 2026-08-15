@@ -399,6 +399,10 @@ const statements = [
   `ALTER TABLE action_images ADD COLUMN IF NOT EXISTS photo_uuid text`,
   `CREATE UNIQUE INDEX IF NOT EXISTS observation_images_photo_uuid_uq ON observation_images (photo_uuid) WHERE photo_uuid IS NOT NULL`,
   `CREATE UNIQUE INDEX IF NOT EXISTS action_images_photo_uuid_uq ON action_images (photo_uuid) WHERE photo_uuid IS NOT NULL`,
+  // Keep field-event (observed_at), device-created, server-received
+  // (created_at) and sync (synced_at) timestamps separately.
+  `ALTER TABLE observations ADD COLUMN IF NOT EXISTS device_created_at timestamp`,
+  `ALTER TABLE actions ADD COLUMN IF NOT EXISTS device_created_at timestamp`,
 ];
 
 export async function runMigrations(): Promise<void> {

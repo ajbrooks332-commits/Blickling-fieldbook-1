@@ -34,6 +34,8 @@ export const actionsTable = pgTable("actions", {
   createdOffline: boolean("created_offline").notNull().default(false),
   offlineId: text("offline_id"),
   syncedAt: timestamp("synced_at"),
+  // When the device originally captured the record (may predate created_at).
+  deviceCreatedAt: timestamp("device_created_at"),
   deletedAt: timestamp("deleted_at"),
   deletedByUserId: integer("deleted_by_user_id").references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),

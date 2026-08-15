@@ -68,6 +68,7 @@ async function transact<T>(mode: IDBTransactionMode, work: (store: IDBObjectStor
 
 export const queueObservation = async (payload: Record<string, unknown>, ownerUserId: number, photos: OfflinePhoto[] = []) => {
   const id = String(payload.offlineId ?? crypto.randomUUID());
+  payload.deviceCreatedAt ??= new Date().toISOString();
   await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "observation", createdAt: new Date().toISOString(), payload, photos: withPhotoUuids(photos) } satisfies OutboxRecord));
   notifyQueued();
   requestBackgroundSync();
@@ -76,6 +77,7 @@ export const queueObservation = async (payload: Record<string, unknown>, ownerUs
 
 export const queueAction = async (payload: Record<string, unknown>, ownerUserId: number) => {
   const id = String(payload.offlineId ?? crypto.randomUUID());
+  payload.deviceCreatedAt ??= new Date().toISOString();
   await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "action", createdAt: new Date().toISOString(), payload } satisfies OutboxRecord));
   notifyQueued();
   requestBackgroundSync();
