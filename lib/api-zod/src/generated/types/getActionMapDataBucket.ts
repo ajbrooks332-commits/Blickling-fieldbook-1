@@ -12,4 +12,5 @@ export type GetActionMapDataBucket = typeof GetActionMapDataBucket[keyof typeof 
 export const GetActionMapDataBucket = {
   open: 'open',
   completed: 'completed',
+  closed: 'closed',
 } as const;

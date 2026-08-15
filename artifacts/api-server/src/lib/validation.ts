@@ -12,6 +12,14 @@ export const coordinateSchema = z.object({
   message: "Latitude and longitude must be supplied together",
 });
 
+/** A strict YYYY-MM-DD calendar date that must exist (rejects e.g. 2026-02-31). */
+export const calendarDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD date")
+  .refine((value) => {
+    const [year, month, day] = value.split("-").map(Number);
+    const date = new Date(Date.UTC(year, month - 1, day));
+    return date.getUTCFullYear() === year && date.getUTCMonth() === month - 1 && date.getUTCDate() === day;
+  }, "That calendar date does not exist");
+
 export const strongPassword = z.string().min(14).max(128)
   .regex(/[a-z]/, "Password must contain a lowercase letter")
   .regex(/[A-Z]/, "Password must contain an uppercase letter")

@@ -4,6 +4,7 @@ import { useCreateAction, useCreateLocation, useGetMe, useGetObservation, useLis
 import { useLocation, useSearch } from "wouter"
 import { Save, Clock, MapPin, ArrowLeft, Check, Plus } from "lucide-react"
 import { queueAction } from "@/lib/offline"
+import { isRealCalendarDate } from "@/lib/utils"
 
 const C = {
   bg: "#0d1117",
@@ -136,6 +137,9 @@ export default function ActionNew() {
     e.preventDefault()
     setError(null)
     if (!me) return setError("Your session could not be verified. Reload the app and try again.")
+    if (formData.dueDate && !isRealCalendarDate(formData.dueDate)) {
+      return setError("The due date is not a real calendar date.")
+    }
     const offlineId = crypto.randomUUID()
     const data = {
       title: formData.title.trim(), description: formData.description.trim() || undefined,
@@ -155,7 +159,14 @@ export default function ActionNew() {
     }
     try {
       const created = await createAction.mutateAsync({ data })
-      setLocation(`/actions/${created.id}`)
+      const transition = (created as { observationTransition?: { applied: boolean; observationStatus: string } | null }).observationTransition
+      if (transition && !transition.applied) {
+        // The linked observation stays in its current status (e.g. draft) because
+        // the workflow does not allow a direct move to "action required".
+        setLocation(`/actions/${created.id}?obsStatusUnchanged=${encodeURIComponent(transition.observationStatus)}`)
+      } else {
+        setLocation(`/actions/${created.id}`)
+      }
     } catch (err) {
       if (err instanceof TypeError) {
         setQueueing(true)

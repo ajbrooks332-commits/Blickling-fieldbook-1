@@ -122,6 +122,50 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       assert.equal(replayedNote.status, 200, await replayedNote.text());
       assert.equal(replayedNote.headers.get("x-idempotent-replay"), "true");
 
+      // --- Regression: impossible calendar dates are rejected at the API boundary ---
+      const badDate = await mutate("/api/actions", "POST", {
+        title: "Bad date", assignedToUserId: admin.id, priority: "low", dueDate: "2026-02-31",
+      });
+      assert.equal(badDate.status, 400, await badDate.text());
+
+      // --- Regression: creating a task must not perform invalid observation transitions ---
+      const draftObs = await mutate("/api/observations", "POST", {
+        title: "Draft observation", categoryId: categories[0].id, priority: "normal",
+        status: "draft", observedAt: new Date().toISOString(),
+      });
+      assert.equal(draftObs.status, 201);
+      const draft = await draftObs.json() as { id: number };
+      const draftAction = await mutate("/api/actions", "POST", {
+        title: "Task on draft", observationId: draft.id, assignedToUserId: admin.id, priority: "normal",
+      });
+      assert.equal(draftAction.status, 201);
+      const draftActionBody = await draftAction.json() as { observationTransition: { applied: boolean; observationStatus: string } };
+      assert.deepEqual(draftActionBody.observationTransition, { applied: false, observationStatus: "draft" });
+      const draftAfter = await fetch(`${origin}/api/observations/${draft.id}`, { headers: { Cookie: cookie } });
+      assert.equal(((await draftAfter.json()) as { status: string }).status, "draft");
+
+      const submittedObs = await mutate("/api/observations", "POST", {
+        title: "Submitted observation", categoryId: categories[0].id, priority: "normal",
+        status: "submitted", observedAt: new Date().toISOString(),
+      });
+      const submitted = await submittedObs.json() as { id: number };
+      const submittedAction = await mutate("/api/actions", "POST", {
+        title: "Task on submitted", observationId: submitted.id, assignedToUserId: admin.id, priority: "normal",
+      });
+      const submittedActionBody = await submittedAction.json() as { observationTransition: { applied: boolean; observationStatus: string } };
+      assert.deepEqual(submittedActionBody.observationTransition, { applied: true, observationStatus: "action_required" });
+      const submittedAfter = await fetch(`${origin}/api/observations/${submitted.id}`, { headers: { Cookie: cookie } });
+      assert.equal(((await submittedAfter.json()) as { status: string }).status, "action_required");
+
+      // --- Regression: closed bucket contains completed and cancelled only; overdue is open-only ---
+      const closedList = await fetch(`${origin}/api/actions?bucket=closed`, { headers: { Cookie: cookie } });
+      assert.equal(closedList.status, 200);
+      const closed = await closedList.json() as { actions: Array<{ status: string }> };
+      assert.equal(closed.actions.length >= 1, true);
+      for (const row of closed.actions) assert.equal(["completed", "cancelled"].includes(row.status), true);
+      const closedOverdue = await fetch(`${origin}/api/actions?bucket=closed&overdue=true`, { headers: { Cookie: cookie } });
+      assert.equal(closedOverdue.status, 400);
+
       const archive = await mutate(`/api/observations/${observation.id}`, "DELETE");
       assert.equal(archive.status, 204);
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });

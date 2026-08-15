@@ -2,7 +2,7 @@ import React from "react"
 import { useListActions } from "@workspace/api-client-react"
 import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X, ChevronDown, ChevronRight, User } from "lucide-react"
 import { Link, useSearch } from "wouter"
-import { formatShortDate } from "@/lib/utils"
+import { formatShortDate, londonToday } from "@/lib/utils"
 
 const C = {
   bg: "#0d1117",
@@ -76,7 +76,7 @@ export default function ActionList() {
   const initialOverdue = urlParams.get("overdue") === "true"
   const initialPriority = urlParams.get("priority") || ""
 
-  const [tab, setTab] = React.useState<"open" | "completed">("open")
+  const [tab, setTab] = React.useState<"open" | "closed">("open")
   const [search, setSearch] = React.useState("")
   const [overdueOnly, setOverdueOnly] = React.useState(initialOverdue)
   const [priorityFilter, setPriorityFilter] = React.useState(initialPriority)
@@ -87,18 +87,21 @@ export default function ActionList() {
   const { data: listData, isLoading, error: loadError } = useListActions({
     bucket: tab,
     search: deferredSearch,
-    ...(overdueOnly ? { overdue: true } : {}),
+    ...(overdueOnly && tab === "open" ? { overdue: true } : {}),
     ...(priorityFilter ? { priority: priorityFilter } : {}),
     page, limit: 20,
   })
 
+  // Overdue is a Europe/London calendar-day comparison: a task due today is not overdue.
   const isOverdue = (dueDate: string | null | undefined, status: string) => {
     if (!dueDate || status === "completed" || status === "cancelled") return false
-    return new Date(dueDate) < new Date()
+    return dueDate.slice(0, 10) < londonToday()
   }
 
-  const switchTab = (next: "open" | "completed") => {
+  const switchTab = (next: "open" | "closed") => {
     setTab(next); setPage(1); setExpandedId(null)
+    // The overdue predicate has no meaning for closed records.
+    if (next === "closed") setOverdueOnly(false)
   }
 
   return (
@@ -111,7 +114,7 @@ export default function ActionList() {
 
       {/* Tabs */}
       <div role="tablist" aria-label="Action lists" style={{ display: "flex", gap: 6, background: C.surface, border: `1px solid ${C.border}`, borderRadius: "0.75rem", padding: 4 }}>
-        {([["open", "Open"], ["completed", "Completed"]] as const).map(([key, label]) => (
+        {([["open", "Open"], ["closed", "Closed"]] as const).map(([key, label]) => (
           <button
             key={key}
             type="button"
@@ -182,7 +185,7 @@ export default function ActionList() {
       </div>
 
       {/* Loading / error / empty */}
-      <div id="action-list-panel" role="tabpanel" aria-label={tab === "open" ? "Open actions" : "Completed actions"} className="space-y-5">
+      <div id="action-list-panel" role="tabpanel" aria-label={tab === "open" ? "Open actions" : "Closed actions"} className="space-y-5">
       {loadError ? <div role="alert" className="rounded-md border border-destructive/30 p-4">Actions could not be loaded.</div> : isLoading ? (
         <div className="flex justify-center items-center gap-1 p-12">
           {[0, 150, 300].map(delay => (

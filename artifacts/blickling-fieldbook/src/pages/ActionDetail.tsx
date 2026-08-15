@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react"
 import { useGetAction, useUpdateActionStatus, useCreateNote, getGetActionQueryKey, useGetMe, getGetMeQueryKey } from "@workspace/api-client-react"
-import { useParams, useLocation, Link } from "wouter"
+import { useParams, useLocation, Link, useSearch } from "wouter"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, ChevronLeft, CheckCircle2, PlayCircle, MessageSquare, FileText, User, Archive, Pencil, Camera } from "lucide-react"
 import { formatShortDate, formatDate } from "@/lib/utils"
@@ -127,6 +127,13 @@ export default function ActionDetail() {
   const [deleting, setDeleting] = useState(false)
   const [requestError, setRequestError] = useState<string | null>(null)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+  const searchParams = new URLSearchParams(useSearch())
+  const obsStatusUnchanged = searchParams.get("obsStatusUnchanged")
+  useEffect(() => {
+    if (obsStatusUnchanged) {
+      setStatusMessage(`Task created. The linked observation remains in "${obsStatusUnchanged.replace(/_/g, " ")}" — submit it to move it through the workflow.`)
+    }
+  }, [obsStatusUnchanged])
   const [images, setImages] = useState<ActionImage[]>([])
   const [imagesLoading, setImagesLoading] = useState(false)
   const [photoError, setPhotoError] = useState<string | null>(null)

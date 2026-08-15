@@ -957,6 +957,7 @@ export type GetActionMapDataBucket = typeof GetActionMapDataBucket[keyof typeof 
 export const GetActionMapDataBucket = {
   open: 'open',
   completed: 'completed',
+  closed: 'closed',
 } as const;
 
 export type ListActionsParams = {
@@ -977,6 +978,7 @@ export type ListActionsBucket = typeof ListActionsBucket[keyof typeof ListAction
 export const ListActionsBucket = {
   open: 'open',
   completed: 'completed',
+  closed: 'closed',
 } as const;
 
 export type ListActivitiesParams = {

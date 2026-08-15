@@ -489,7 +489,7 @@ export const GetObservationMapDataResponse = zod.array(GetObservationMapDataResp
  * @summary Get lightweight action data for map markers
  */
 export const GetActionMapDataQueryParams = zod.object({
-  "bucket": zod.enum(['open', 'completed']).optional(),
+  "bucket": zod.enum(['open', 'completed', 'closed']).optional(),
   "priority": zod.coerce.string().optional(),
   "namedLocationId": zod.coerce.number().optional()
 })
@@ -705,7 +705,7 @@ export const UpdateObservationStatusResponse = zod.object({
  */
 export const ListActionsQueryParams = zod.object({
   "status": zod.coerce.string().optional(),
-  "bucket": zod.enum(['open', 'completed']).optional(),
+  "bucket": zod.enum(['open', 'completed', 'closed']).optional(),
   "priority": zod.coerce.string().optional(),
   "assignedUserId": zod.coerce.number().optional(),
   "observationId": zod.coerce.number().optional(),

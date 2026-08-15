@@ -7,13 +7,13 @@ import {
 } from "@workspace/db";
 import { canUpdateAction, isManager, requireAuth, requireRole } from "../lib/auth";
 import { generateActionRef } from "../lib/references";
-import { idSchema, isPostgresError, optionalText, shortText, validationError } from "../lib/validation";
-import { actionStatuses, actionTransitions, canTransition } from "../lib/workflows";
+import { calendarDate, idSchema, isPostgresError, optionalText, shortText, validationError } from "../lib/validation";
+import { actionStatuses, actionTransitions, canTransition, observationTransitions, type ObservationStatus } from "../lib/workflows";
 
 const router = Router();
 const priority = z.enum(["low", "normal", "high", "urgent"]);
 const status = z.enum(actionStatuses);
-const dueDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use a YYYY-MM-DD due date");
+const dueDate = calendarDate;
 const createSchema = z.object({
   title: shortText, description: optionalText(10000), observationId: z.number().int().positive().optional().nullable(),
   namedLocationId: z.number().int().positive().optional().nullable(),
@@ -58,7 +58,8 @@ async function validateObservation(propertyId: number, observationId?: number | 
 async function validateLocation(propertyId: number, namedLocationId?: number | null) {
   if (!namedLocationId) return true;
   const [row] = await db.select({ id: namedLocationsTable.id }).from(namedLocationsTable)
-    .where(and(eq(namedLocationsTable.id, namedLocationId), eq(namedLocationsTable.propertyId, propertyId))).limit(1);
+    .where(and(eq(namedLocationsTable.id, namedLocationId), eq(namedLocationsTable.propertyId, propertyId),
+      eq(namedLocationsTable.active, true))).limit(1);
   return Boolean(row);
 }
 
@@ -91,7 +92,7 @@ router.get("/my", requireAuth, async (req, res) => {
 
 router.get("/", requireAuth, async (req, res) => {
   const parsed = z.object({
-    status: status.optional(), bucket: z.enum(["open", "completed"]).optional(),
+    status: status.optional(), bucket: z.enum(["open", "completed", "closed"]).optional(),
     priority: priority.optional(), assignedUserId: idSchema.optional(), observationId: idSchema.optional(),
     overdue: z.enum(["true", "false"]).optional(), search: z.string().trim().max(200).optional(),
     page: z.coerce.number().int().positive().default(1), limit: z.coerce.number().int().min(1).max(100).default(20),
@@ -100,8 +101,14 @@ router.get("/", requireAuth, async (req, res) => {
   const q = parsed.data;
   const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt)];
   if (q.status) conditions.push(eq(actionsTable.status, q.status));
+  // "closed" is the accurate name for the combined completed+cancelled bucket;
+  // "completed" is kept as a backwards-compatible alias.
+  const closedBucket = q.bucket === "completed" || q.bucket === "closed";
+  if (closedBucket && q.overdue === "true") {
+    return void res.status(400).json({ error: "The overdue filter applies to open tasks only" });
+  }
   if (q.bucket === "open") conditions.push(sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`);
-  if (q.bucket === "completed") conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
+  if (closedBucket) conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
   if (q.priority) conditions.push(eq(actionsTable.priority, q.priority));
   if (q.assignedUserId) conditions.push(eq(actionsTable.assignedToUserId, q.assignedUserId));
   if (q.observationId) conditions.push(eq(actionsTable.observationId, q.observationId));
@@ -137,6 +144,7 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
     return void res.status(400).json({ error: "Location not found for this estate" });
   }
   const referenceNumber = await generateActionRef(user.propertyId!);
+  let observationTransition: { applied: boolean; observationStatus: string } | null = null;
   const action = await db.transaction(async (tx) => {
     const [created] = await tx.insert(actionsTable).values({
       propertyId: user.propertyId!, referenceNumber, title: parsed.data.title,
@@ -151,7 +159,15 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
     if (created.observationId) {
       const [observation] = await tx.select({ status: observationsTable.status }).from(observationsTable)
         .where(eq(observationsTable.id, created.observationId)).limit(1);
-      if (observation && !["resolved", "closed", "cancelled"].includes(observation.status)) {
+      // Only perform the declared-workflow transition. A draft (or any status
+      // without a valid path to action_required) is left unchanged; the
+      // response reports this so the UI can give clear feedback.
+      const canApply = observation ? canTransition(observationTransitions, observation.status as ObservationStatus, "action_required") : false;
+      if (observation && observation.status !== "action_required" && !canApply) {
+        observationTransition = { applied: false, observationStatus: observation.status };
+      }
+      if (observation && observation.status !== "action_required" && canApply) {
+        observationTransition = { applied: true, observationStatus: "action_required" };
         await tx.update(observationsTable).set({ status: "action_required", updatedAt: new Date() })
           .where(eq(observationsTable.id, created.observationId));
         await tx.insert(auditEventsTable).values({ propertyId: user.propertyId!, observationId: created.observationId,
@@ -177,12 +193,12 @@ router.post("/", requireAuth, requireRole("administrator", "manager"), async (re
   const [full] = await baseSelect().where(eq(actionsTable.id, action.id)).limit(1);
   const replayed = action.referenceNumber !== referenceNumber;
   if (replayed) res.setHeader("X-Idempotent-Replay", "true");
-  res.status(replayed ? 200 : 201).json(full);
+  res.status(replayed ? 200 : 201).json(replayed ? full : { ...full, observationTransition });
 });
 
 router.get("/map", requireAuth, async (req, res) => {
   const query = z.object({
-    bucket: z.enum(["open", "completed"]).optional(), priority: priority.optional(), namedLocationId: idSchema.optional(),
+    bucket: z.enum(["open", "completed", "closed"]).optional(), priority: priority.optional(), namedLocationId: idSchema.optional(),
   }).safeParse(req.query);
   if (!query.success) return validationError(res, query.error);
   const q = query.data;
@@ -192,7 +208,7 @@ router.get("/map", requireAuth, async (req, res) => {
   const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt),
     sql`${latitude} IS NOT NULL`, sql`${longitude} IS NOT NULL`];
   if (q.bucket === "open" || !q.bucket) conditions.push(sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`);
-  if (q.bucket === "completed") conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
+  if (q.bucket === "completed" || q.bucket === "closed") conditions.push(sql`${actionsTable.status} IN ('completed', 'cancelled')`);
   if (q.priority) conditions.push(eq(actionsTable.priority, q.priority));
   if (q.namedLocationId) conditions.push(sql`COALESCE(${actionsTable.namedLocationId}, ${observationsTable.namedLocationId}) = ${q.namedLocationId}`);
   const where = and(...conditions);

@@ -12,4 +12,5 @@ export type ListActionsBucket = typeof ListActionsBucket[keyof typeof ListAction
 export const ListActionsBucket = {
   open: 'open',
   completed: 'completed',
+  closed: 'closed',
 } as const;

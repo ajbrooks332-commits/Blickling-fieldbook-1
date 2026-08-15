@@ -488,7 +488,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [open, completed]
+            enum: [open, completed, closed]
         - name: priority
           in: query
           schema:
@@ -604,7 +604,7 @@ paths:
           in: query
           schema:
             type: string
-            enum: [open, completed]
+            enum: [open, completed, closed]
         - name: priority
           in: query
           schema:
