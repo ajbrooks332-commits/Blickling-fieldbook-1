@@ -979,6 +979,20 @@ paths:
               schema:
                 type: string
 
+  # Offline
+  /offline/snapshot:
+    get:
+      operationId: getOfflineSnapshot
+      tags: [offline]
+      summary: Whole active estate dataset for the deliberate offline preload
+      responses:
+        "200":
+          description: Complete active dataset scoped to the caller's property
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OfflineSnapshot"
+
   # Storage
   /storage/uploads/request-url:
     post:
@@ -2261,6 +2275,75 @@ components:
             $ref: "#/components/schemas/ChartPoint"
 
     # Storage
+    OfflineSnapshot:
+      type: object
+      description: >
+        Complete active dataset for the caller's property, used by the offline
+        preload. Collections are full row arrays; their per-column shapes are
+        intentionally free-form here because the client stores them verbatim.
+      required: [serverTime, propertyId, categories, locations, activityTypes, users, observations, actions, notes, activities, activityParticipants, activityLocations, observationImages]
+      properties:
+        serverTime:
+          type: string
+          format: date-time
+        propertyId:
+          type: integer
+        categories:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        locations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        activityTypes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        users:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        observations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        actions:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        notes:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        activities:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        activityParticipants:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        activityLocations:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        observationImages:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
     UploadUrlRequest:
       type: object
       required: [name, size, contentType]

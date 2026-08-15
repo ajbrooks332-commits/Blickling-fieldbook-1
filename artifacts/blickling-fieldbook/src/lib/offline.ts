@@ -17,13 +17,15 @@ export interface OfflinePhoto {
 interface OutboxRecord {
   id: string;
   ownerUserId: number;
-  kind: "observation" | "action" | "photo" | "status" | "note";
+  kind: "observation" | "action" | "photo" | "status" | "note" | "activity";
   createdAt: string;
   payload: Record<string, unknown>;
   photos?: OfflinePhoto[];
   entityType?: "observations" | "actions";
   entityId?: number;
   lastError?: string;
+  /** Terminal 4xx failure: parked so it never blocks later valid work. */
+  quarantined?: boolean;
 }
 
 export interface PendingChange {
@@ -31,6 +33,7 @@ export interface PendingChange {
   kind: OutboxRecord["kind"];
   createdAt: string;
   lastError?: string;
+  quarantined?: boolean;
 }
 
 function database(): Promise<IDBDatabase> {
@@ -95,6 +98,15 @@ export const queueStatusUpdate = async (
   requestBackgroundSync();
 };
 
+export const queueActivity = async (payload: Record<string, unknown>, ownerUserId: number) => {
+  const id = String(payload.offlineId ?? crypto.randomUUID());
+  await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "activity", createdAt: new Date().toISOString(),
+    payload } satisfies OutboxRecord));
+  notifyQueued();
+  requestBackgroundSync();
+  return id;
+};
+
 export const queueNote = async (payload: Record<string, unknown>, ownerUserId: number) => {
   const id = String(payload.offlineId ?? crypto.randomUUID());
   await transact("readwrite", (store) => store.put({ id, ownerUserId, kind: "note", createdAt: new Date().toISOString(),
@@ -126,7 +138,17 @@ export async function listPendingChanges(ownerUserId: number): Promise<PendingCh
   const records = await transact<OutboxRecord[]>("readonly", (store) => store.getAll());
   return records.filter((record) => record.ownerUserId === ownerUserId)
     .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
-    .map(({ id, kind, createdAt, lastError }) => ({ id, kind, createdAt, lastError }));
+    .map(({ id, kind, createdAt, lastError, quarantined }) => ({ id, kind, createdAt, lastError, quarantined }));
+}
+
+/** Un-quarantine a change so the next sync attempts it again. */
+export async function retryPendingChange(id: string, ownerUserId: number): Promise<void> {
+  const record = await transact<OutboxRecord | undefined>("readonly", (store) => store.get(id));
+  if (!record || record.ownerUserId !== ownerUserId) throw new Error("Queued change not found for this account");
+  record.quarantined = false;
+  record.lastError = undefined;
+  await transact("readwrite", (store) => store.put(record));
+  notifyQueued();
 }
 
 export async function discardPendingChange(id: string, ownerUserId: number): Promise<void> {
@@ -155,12 +177,15 @@ export async function syncOutbox(): Promise<{ synced: number; remaining: number 
   let synced = 0;
   for (const record of records.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     if (record.ownerUserId !== currentUser.id) continue;
+    if (record.quarantined) continue; // parked until the user fixes/retries/discards it
     try {
       if (record.kind === "observation") {
         const created = await apiJson<{ id: number }>("/api/observations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
         for (const photo of record.photos ?? []) await uploadPhoto("observations", created.id, photo);
       } else if (record.kind === "action") {
         await apiJson("/api/actions", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
+      } else if (record.kind === "activity") {
+        await apiJson("/api/activities", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(record.payload) });
       } else if (record.kind === "status" && record.entityType && record.entityId) {
         await apiJson(`/api/${record.entityType}/${record.entityId}/status`, { method: "PATCH", headers: { "Content-Type": "application/json" },
           body: JSON.stringify(record.payload) });
@@ -172,10 +197,14 @@ export async function syncOutbox(): Promise<{ synced: number; remaining: number 
       await transact("readwrite", (store) => store.delete(record.id));
       synced += 1;
     } catch (error) {
-      if (error instanceof ApiRequestError && error.status < 500) {
+      if (error instanceof ApiRequestError && error.status >= 400 && error.status < 500) {
+        // Terminal for this item: quarantine it and CONTINUE with later work.
         record.lastError = error.message;
+        record.quarantined = true;
         await transact("readwrite", (store) => store.put(record));
+        continue;
       }
+      // Network/server failure — likely affects everything; stop for now.
       break;
     }
   }

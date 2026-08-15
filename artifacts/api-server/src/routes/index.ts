@@ -12,6 +12,7 @@ import dashboardRouter from "./dashboard";
 import reportsRouter from "./reports";
 import storageRouter from "./storage";
 import imagesRouter from "./images";
+import offlineRouter from "./offline";
 import { requireAuth, requirePasswordChanged } from "../lib/auth";
 
 const router: IRouter = Router();
@@ -30,5 +31,6 @@ router.use(activitiesRouter);
 router.use("/dashboard", dashboardRouter);
 router.use("/reports", reportsRouter);
 router.use(imagesRouter);
+router.use("/offline", offlineRouter);
 
 export default router;

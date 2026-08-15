@@ -1349,6 +1349,26 @@ export const ExportReportCsvResponse = zod.unknown()
 
 
 /**
+ * @summary Whole active estate dataset for the deliberate offline preload
+ */
+export const GetOfflineSnapshotResponse = zod.object({
+  "serverTime": zod.coerce.date(),
+  "propertyId": zod.number(),
+  "categories": zod.array(zod.record(zod.string(), zod.unknown())),
+  "locations": zod.array(zod.record(zod.string(), zod.unknown())),
+  "activityTypes": zod.array(zod.record(zod.string(), zod.unknown())),
+  "users": zod.array(zod.record(zod.string(), zod.unknown())),
+  "observations": zod.array(zod.record(zod.string(), zod.unknown())),
+  "actions": zod.array(zod.record(zod.string(), zod.unknown())),
+  "notes": zod.array(zod.record(zod.string(), zod.unknown())),
+  "activities": zod.array(zod.record(zod.string(), zod.unknown())),
+  "activityParticipants": zod.array(zod.record(zod.string(), zod.unknown())),
+  "activityLocations": zod.array(zod.record(zod.string(), zod.unknown())),
+  "observationImages": zod.array(zod.record(zod.string(), zod.unknown()))
+}).describe('Complete active dataset for the caller\'s property, used by the offline preload. Collections are full row arrays; their per-column shapes are intentionally free-form here because the client stores them verbatim.\n')
+
+
+/**
  * @summary Request a presigned URL for file upload
  */
 export const RequestUploadUrlBody = zod.object({

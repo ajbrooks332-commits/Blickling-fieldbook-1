@@ -53,6 +53,7 @@ const createSchema = z.object({
   contractorMinutes: z.number().int().min(0).max(100000).optional().nullable(),
   contractorHoursUnknown: z.boolean().default(false),
   notes: optionalText(2000),
+  offlineId: z.string().uuid().optional(),
 }).strict()
   .refine((v) => !(v.contractorHoursUnknown && v.contractorMinutes != null),
     "Contractor hours cannot be both recorded and unknown")
@@ -313,7 +314,14 @@ router.post("/activities", requireAuth, async (req, res) => {
   if (!parsed.success) return validationError(res, parsed.error);
   const propertyId = req.authUser!.propertyId!;
   const { activityTypeId, namedLocationIds, activityDate, durationMinutes, participantUserIds, notes,
-    volunteerCount, contractorMinutes, contractorHoursUnknown } = parsed.data;
+    volunteerCount, contractorMinutes, contractorHoursUnknown, offlineId } = parsed.data;
+
+  // Idempotent replay: an offline queue retry must never create a duplicate.
+  if (offlineId) {
+    const [existing] = await db.select({ id: activityLogsTable.id }).from(activityLogsTable)
+      .where(and(eq(activityLogsTable.offlineId, offlineId), eq(activityLogsTable.propertyId, propertyId))).limit(1);
+    if (existing) return void res.status(200).json({ id: existing.id });
+  }
 
   const [type] = await db.select({ id: activityTypesTable.id }).from(activityTypesTable)
     .where(and(eq(activityTypesTable.id, activityTypeId), eq(activityTypesTable.propertyId, propertyId), eq(activityTypesTable.active, true))).limit(1);
@@ -343,6 +351,7 @@ router.post("/activities", requireAuth, async (req, res) => {
       volunteerCount: volunteerCount ?? null,
       contractorMinutes: contractorHoursUnknown ? null : contractorMinutes ?? null,
       contractorHoursUnknown,
+      offlineId: offlineId ?? null,
       recordedByUserId: req.authUser!.id,
     }).returning();
     if (uniqueLocations.length > 0) {

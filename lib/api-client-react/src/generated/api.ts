@@ -66,6 +66,7 @@ import type {
   ObservationList,
   ObservationMarker,
   ObservationUpdate,
+  OfflineSnapshot,
   ReportSummary,
   SetupInput,
   SetupStatus,
@@ -3340,6 +3341,83 @@ export function useExportReportCsv<TData = Awaited<ReturnType<typeof exportRepor
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getExportReportCsvQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return withQueryKey(query, queryOptions.queryKey);
+}
+
+
+
+
+
+
+
+export const getGetOfflineSnapshotUrl = () => {
+
+
+
+
+  return `/api/offline/snapshot`
+}
+
+/**
+ * @summary Whole active estate dataset for the deliberate offline preload
+ */
+export const getOfflineSnapshot = async ( options?: RequestInit): Promise<OfflineSnapshot> => {
+
+  return customFetch<OfflineSnapshot>(getGetOfflineSnapshotUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOfflineSnapshotQueryKey = () => {
+    return [
+    `/api/offline/snapshot`
+    ] as const;
+    }
+
+
+export const getGetOfflineSnapshotQueryOptions = <TData = Awaited<ReturnType<typeof getOfflineSnapshot>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOfflineSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOfflineSnapshotQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOfflineSnapshot>>> = ({ signal }) => getOfflineSnapshot({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOfflineSnapshot>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOfflineSnapshotQueryResult = NonNullable<Awaited<ReturnType<typeof getOfflineSnapshot>>>
+export type GetOfflineSnapshotQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Whole active estate dataset for the deliberate offline preload
+ */
+
+export function useGetOfflineSnapshot<TData = Awaited<ReturnType<typeof getOfflineSnapshot>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOfflineSnapshot>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOfflineSnapshotQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

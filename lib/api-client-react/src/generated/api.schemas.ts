@@ -911,6 +911,47 @@ export interface ReportSummary {
   byLocation?: ChartPoint[];
 }
 
+export type OfflineSnapshotCategoriesItem = { [key: string]: unknown };
+
+export type OfflineSnapshotLocationsItem = { [key: string]: unknown };
+
+export type OfflineSnapshotActivityTypesItem = { [key: string]: unknown };
+
+export type OfflineSnapshotUsersItem = { [key: string]: unknown };
+
+export type OfflineSnapshotObservationsItem = { [key: string]: unknown };
+
+export type OfflineSnapshotActionsItem = { [key: string]: unknown };
+
+export type OfflineSnapshotNotesItem = { [key: string]: unknown };
+
+export type OfflineSnapshotActivitiesItem = { [key: string]: unknown };
+
+export type OfflineSnapshotActivityParticipantsItem = { [key: string]: unknown };
+
+export type OfflineSnapshotActivityLocationsItem = { [key: string]: unknown };
+
+export type OfflineSnapshotObservationImagesItem = { [key: string]: unknown };
+
+/**
+ * Complete active dataset for the caller's property, used by the offline preload. Collections are full row arrays; their per-column shapes are intentionally free-form here because the client stores them verbatim.
+ */
+export interface OfflineSnapshot {
+  serverTime: string;
+  propertyId: number;
+  categories: OfflineSnapshotCategoriesItem[];
+  locations: OfflineSnapshotLocationsItem[];
+  activityTypes: OfflineSnapshotActivityTypesItem[];
+  users: OfflineSnapshotUsersItem[];
+  observations: OfflineSnapshotObservationsItem[];
+  actions: OfflineSnapshotActionsItem[];
+  notes: OfflineSnapshotNotesItem[];
+  activities: OfflineSnapshotActivitiesItem[];
+  activityParticipants: OfflineSnapshotActivityParticipantsItem[];
+  activityLocations: OfflineSnapshotActivityLocationsItem[];
+  observationImages: OfflineSnapshotObservationImagesItem[];
+}
+
 export interface UploadUrlRequest {
   name: string;
   size: number;

@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query"
 import { getGetMeQueryKey } from "@workspace/api-client-react"
 import { Loader2 } from "lucide-react"
 import { clearPrivateCache } from "@/lib/offline"
+import { recordOnlineAuth } from "@/lib/offlineStore"
 
 const C = {
   bg: "#0d1117",
@@ -38,6 +39,9 @@ export default function Login() {
           await clearPrivateCache()
           queryClient.clear()
           queryClient.setQueryData(getGetMeQueryKey(), data)
+          // Successful ONLINE authentication starts the 8-hour offline lease.
+          const me = data as { id: number; propertyId?: number | null }
+          await recordOnlineAuth(me.id, me.propertyId ?? 0).catch(() => undefined)
           setLocation("/")
         },
         onError: () => {

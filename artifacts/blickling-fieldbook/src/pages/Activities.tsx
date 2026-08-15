@@ -6,6 +6,7 @@ import {
   getListActivitiesQueryKey, getListActivityTypesQueryKey, getListLocationsQueryKey, getGetActivityReportQueryKey,
 } from "@workspace/api-client-react"
 import { BarChart3, Check, Clock, Download, Loader2, MapPin, PencilLine, Plus, Trash2, Users } from "lucide-react"
+import { queueActivity } from "@/lib/offline"
 
 const C = {
   bg: "#0d1117",
@@ -357,7 +358,7 @@ export default function Activities() {
       return
     }
     setError(null)
-    createActivity.mutate({ data: {
+    const payload = {
       activityTypeId: typeId!,
       namedLocationIds: locationIds,
       activityDate,
@@ -366,9 +367,20 @@ export default function Activities() {
       ...(volunteers != null ? { volunteerCount: volunteers } : {}),
       ...(contractorMinutes != null ? { contractorMinutes } : {}),
       contractorHoursUnknown: contractorChoice === "unknown",
-      ...(participants.length === 0 ? { hoursStatus: noStaffReason || (contractorChoice === "unknown" ? "contractor_unknown" : "elapsed_only") } : {}),
+      ...(participants.length === 0 ? { hoursStatus: (noStaffReason || (contractorChoice === "unknown" ? "contractor_unknown" : "elapsed_only")) as "elapsed_only" | "contractor_unknown" | "other_unknown" } : {}),
       notes: notes.trim() ? notes.trim() : null,
-    } })
+    }
+    if (!navigator.onLine && me) {
+      // Queue for later sync instead of failing.
+      void queueActivity({ ...payload, offlineId: crypto.randomUUID() }, me.id).then(() => {
+        setTypeId(null); setLocationIds([]); setParticipants([]); setDuration(null)
+        setCustomDuration(false); setCustomHours(""); setNotes(""); setError(null)
+        setVolunteerCount(""); setContractorChoice("none"); setContractorHours(""); setNoStaffReason("")
+        setSaved(true); window.setTimeout(() => setSaved(false), 2500)
+      }).catch(() => setError("Could not save the activity offline."))
+      return
+    }
+    createActivity.mutate({ data: payload })
   }
 
   const grouped = useMemo(() => {

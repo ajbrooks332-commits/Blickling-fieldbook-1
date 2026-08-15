@@ -26,6 +26,8 @@ export const activityLogsTable = pgTable("activity_logs", {
   contractorMinutes: integer("contractor_minutes"),
   contractorHoursUnknown: boolean("contractor_hours_unknown").notNull().default(false),
   notes: text("notes"),
+  // Idempotency key for offline-created activities.
+  offlineId: text("offline_id"),
   recordedByUserId: integer("recorded_by_user_id").notNull().references(() => usersTable.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   deletedAt: timestamp("deleted_at"),

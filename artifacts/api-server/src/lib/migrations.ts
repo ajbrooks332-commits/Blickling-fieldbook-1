@@ -389,6 +389,10 @@ const statements = [
     ALTER TABLE activity_logs ADD CONSTRAINT activity_logs_hours_status_check
       CHECK (hours_status IN ('staff_participants', 'elapsed_only', 'contractor_unknown', 'other_unknown'));
   EXCEPTION WHEN duplicate_object THEN NULL; END $$`,
+  // Idempotency key for offline-created activities: replaying the same queued
+  // record must never create a duplicate.
+  `ALTER TABLE activity_logs ADD COLUMN IF NOT EXISTS offline_id text`,
+  `CREATE UNIQUE INDEX IF NOT EXISTS activity_logs_offline_id_unique ON activity_logs (offline_id) WHERE offline_id IS NOT NULL`,
 ];
 
 export async function runMigrations(): Promise<void> {

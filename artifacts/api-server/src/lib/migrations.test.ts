@@ -296,6 +296,29 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       assert.ok(longCsv.includes("Backdated observation"));
       assert.ok(longCsv.includes("Created at"), "process timestamps retained in export");
 
+      // --- Regression: offline snapshot + activity idempotency ---
+      const offlineId = crypto.randomUUID();
+      const firstReplay = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 30, participantUserIds: [], hoursStatus: "elapsed_only", offlineId,
+      });
+      assert.equal(firstReplay.status, 201);
+      const firstReplayBody = await firstReplay.json() as { id: number };
+      const secondReplay = await mutate("/api/activities", "POST", {
+        activityTypeId: typeId, activityDate, durationMinutes: 30, participantUserIds: [], hoursStatus: "elapsed_only", offlineId,
+      });
+      assert.equal(secondReplay.status, 200); // replay, not duplicate
+      const secondReplayBody = await secondReplay.json() as { id: number };
+      assert.equal(secondReplayBody.id, firstReplayBody.id);
+
+      const snapshotRes = await fetch(`${origin}/api/offline/snapshot`, { headers: { Cookie: cookie } });
+      assert.equal(snapshotRes.status, 200);
+      const snapshot = await snapshotRes.json() as Record<string, unknown[]> & { serverTime: string };
+      assert.ok(snapshot.serverTime);
+      assert.ok((snapshot.observations as unknown[]).length >= 1);
+      assert.ok((snapshot.activities as unknown[]).length >= 4);
+      assert.ok((snapshot.categories as unknown[]).length >= 1);
+      assert.ok(Array.isArray(snapshot.activityParticipants));
+
       const archive = await mutate(`/api/observations/${observation.id}`, "DELETE");
       assert.equal(archive.status, 204);
       const archivedAction = await fetch(`${origin}/api/actions/${action.id}`, { headers: { Cookie: cookie } });

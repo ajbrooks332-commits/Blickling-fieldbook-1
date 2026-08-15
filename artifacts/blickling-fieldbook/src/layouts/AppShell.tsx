@@ -21,6 +21,7 @@ import {
 } from "lucide-react"
 import { useLogout } from "@workspace/api-client-react"
 import { clearPrivateCache, pendingCount, pendingCountForOtherUser, pendingCountForUser, syncOutbox } from "@/lib/offline"
+import { clearOfflineData, offlineLeaseState, recordOnlineAuth } from "@/lib/offlineStore"
 
 // ─── Terrain colour tokens (hardcoded for shell so they never depend on cascade) ─
 const C = {
@@ -124,6 +125,9 @@ export default function AppShell({ children, user }: { children: React.ReactNode
     }
     logout.mutate(undefined, { onSuccess: async () => {
       await clearPrivateCache()
+      // Successful logout removes this account's cached estate dataset from
+      // the device (server records and the guarded outbox are untouched).
+      await clearOfflineData(user.id, (user as { propertyId?: number | null }).propertyId ?? 0).catch(() => undefined)
       window.location.assign(`${import.meta.env.BASE_URL}login`)
     } })
   }
@@ -135,21 +139,53 @@ export default function AppShell({ children, user }: { children: React.ReactNode
     return () => window.removeEventListener("keydown", close)
   }, [drawerOpen, createOpen, closeCreate])
 
+  const [leaseExpired, setLeaseExpired] = React.useState(false)
   React.useEffect(() => {
+    const propertyId = (user as { propertyId?: number | null }).propertyId ?? 0
     const refresh = () => {
       setOnline(navigator.onLine)
       void Promise.all([pendingCount(), pendingCountForOtherUser(user.id)]).then(([count, other]) => {
         setPending(count)
         setOutboxError(other > 0 ? "Queued changes on this device belong to another account and will not be synced as you." : null)
       }).catch(() => undefined)
+      if (navigator.onLine) {
+        // Being here online means the session is valid — renew the offline lease.
+        void recordOnlineAuth(user.id, propertyId).then(() => setLeaseExpired(false)).catch(() => undefined)
+      } else {
+        void offlineLeaseState(user.id, propertyId).then((lease) => setLeaseExpired(!lease.valid)).catch(() => undefined)
+      }
     }
     window.addEventListener("online", refresh); window.addEventListener("offline", refresh); window.addEventListener("fieldbook-sync", refresh)
     refresh()
-    return () => { window.removeEventListener("online", refresh); window.removeEventListener("offline", refresh); window.removeEventListener("fieldbook-sync", refresh) }
+    const leaseTimer = window.setInterval(refresh, 5 * 60 * 1000)
+    return () => { window.removeEventListener("online", refresh); window.removeEventListener("offline", refresh); window.removeEventListener("fieldbook-sync", refresh); window.clearInterval(leaseTimer) }
   }, [user.id])
 
   const isActive = (href: string) =>
     href === "/" ? location === "/" : location.startsWith(href)
+
+  // Offline authorisation lease expired: keep queued work safe, but block
+  // viewing cached estate data or creating more records until re-auth online.
+  if (!online && leaseExpired) {
+    return (
+      <div className="flex min-h-[100dvh] w-full items-center justify-center p-6" style={{ background: C.bg }}>
+        <div role="alert" className="max-w-md rounded-xl border p-6 space-y-3" style={{ background: C.surface, borderColor: C.border }}>
+          <h1 className="text-lg font-bold" style={{ color: C.text }}>Offline access has expired</h1>
+          <p className="text-sm" style={{ color: C.textMuted }}>
+            It has been more than 8 hours since this device last signed in online. Your queued field
+            changes {pending > 0 ? `(${pending}) are kept safely on this phone` : "are kept safely on this phone"} and
+            will sync once you sign in again — nothing is lost.
+          </p>
+          <p className="text-sm" style={{ color: C.textMuted }}>
+            Reconnect to the internet and sign in to continue using Fieldbook.
+          </p>
+          <button type="button" onClick={() => window.location.reload()} className="rounded-md border px-4 py-2 text-sm" style={{ color: C.text, borderColor: C.border }}>
+            Try again
+          </button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="flex min-h-[100dvh] w-full" style={{ background: C.bg }}>
