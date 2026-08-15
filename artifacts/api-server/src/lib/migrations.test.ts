@@ -350,6 +350,15 @@ test("migrations bootstrap an empty PostgreSQL database and remain idempotent", 
       assert.ok(restoredObsBody.auditEvents.some((e) => e.eventType === "observation_archived"));
       assert.ok(restoredObsBody.auditEvents.some((e) => e.eventType === "observation_restored"));
 
+      // Meeting pack: open tasks only, with counts and latest-note field.
+      const pack = await fetch(`${origin}/api/actions/meeting-pack`, { headers: { Cookie: cookie } });
+      assert.equal(pack.status, 200);
+      const packBody = await pack.json() as { counts: { total: number }; tasks: Array<{ id: number; status: string }> };
+      // This action was completed earlier in the flow, so the pack must exclude it.
+      assert.ok(packBody.tasks.every((t) => t.id !== action.id));
+      assert.ok(packBody.tasks.every((t) => t.status !== "completed" && t.status !== "cancelled"));
+      assert.equal(packBody.counts.total, packBody.tasks.length);
+
       // Re-archive so later reference-data assertions see the original state.
       const rearchiveAct = await mutate(`/api/actions/${action.id}`, "DELETE");
       assert.equal(rearchiveAct.status, 204);

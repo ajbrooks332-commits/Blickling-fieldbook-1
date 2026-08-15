@@ -1,6 +1,6 @@
 import React from "react"
 import { useListActions } from "@workspace/api-client-react"
-import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X, ChevronDown, ChevronRight, User } from "lucide-react"
+import { Search, AlertTriangle, ArrowUp, Minus, ArrowDown, MapPin, Clock, FileText, X, ChevronDown, ChevronRight, User, Printer } from "lucide-react"
 import { Link, useSearch } from "wouter"
 import { formatShortDate, londonToday } from "@/lib/utils"
 
@@ -107,9 +107,23 @@ export default function ActionList() {
   return (
     <div className="space-y-5">
       {/* Page header */}
-      <div>
-        <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Actions</h1>
-        <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Manage tasks and assignments across the estate</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 style={{ ...HEAD, fontSize: 22, fontWeight: 700, color: C.text }}>Actions</h1>
+          <p style={{ ...BODY, fontSize: 13, color: C.muted, marginTop: 2 }}>Manage tasks and assignments across the estate</p>
+        </div>
+        <Link href={`/actions/meeting-pack${(() => {
+          const params = new URLSearchParams()
+          if (priorityFilter) params.set("priority", priorityFilter)
+          if (overdueOnly) params.set("overdue", "true")
+          if (deferredSearch) params.set("search", deferredSearch)
+          const qs = params.toString()
+          return qs ? `?${qs}` : ""
+        })()}`}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-sm shrink-0"
+          style={{ border: `1px solid ${C.border}`, color: C.muted, ...HEAD }}>
+          <Printer className="w-4 h-4" /> Export open tasks for meeting
+        </Link>
       </div>
 
       {/* Tabs */}

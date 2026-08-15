@@ -240,6 +240,48 @@ router.get("/map", requireAuth, async (req, res) => {
   res.json(rows);
 });
 
+// Open-task meeting pack: all open tasks (never completed/cancelled), with the
+// currently applied list filters, counts and each task's latest note, ordered
+// overdue-first, then urgent/high/normal/low, then due date.
+router.get("/meeting-pack", requireAuth, async (req, res) => {
+  const parsed = z.object({
+    priority: priority.optional(), assignedUserId: idSchema.optional(),
+    overdue: z.enum(["true", "false"]).optional(), search: z.string().trim().max(200).optional(),
+  }).safeParse(req.query);
+  if (!parsed.success) return validationError(res, parsed.error);
+  const q = parsed.data;
+  const conditions = [eq(actionsTable.propertyId, req.authUser!.propertyId!), isNull(actionsTable.deletedAt),
+    sql`${actionsTable.status} NOT IN ('completed', 'cancelled')`];
+  if (q.priority) conditions.push(eq(actionsTable.priority, q.priority));
+  if (q.assignedUserId) conditions.push(eq(actionsTable.assignedToUserId, q.assignedUserId));
+  if (q.overdue === "true") conditions.push(sql`${actionsTable.dueDate}::date < (now() AT TIME ZONE 'Europe/London')::date`);
+  if (q.search) conditions.push(or(ilike(actionsTable.referenceNumber, `%${q.search}%`), ilike(actionsTable.title, `%${q.search}%`),
+    ilike(actionsTable.description, `%${q.search}%`), ilike(usersTable.name, `%${q.search}%`))!);
+  const overdueExpr = sql<boolean>`(${actionsTable.dueDate} IS NOT NULL AND ${actionsTable.dueDate}::date < (now() AT TIME ZONE 'Europe/London')::date)`;
+  const rows = await db.select({ ...actionFields, isOverdue: overdueExpr,
+    latestNote: sql<string | null>`(SELECT n.body FROM notes n WHERE n.action_id = ${actionsTable.id} ORDER BY n.created_at DESC LIMIT 1)` })
+    .from(actionsTable)
+    .leftJoin(observationsTable, eq(actionsTable.observationId, observationsTable.id))
+    .leftJoin(usersTable, eq(actionsTable.assignedToUserId, usersTable.id))
+    .leftJoin(namedLocationsTable, eq(actionsTable.namedLocationId, namedLocationsTable.id))
+    .where(and(...conditions))
+    .orderBy(sql`${overdueExpr} DESC`,
+      sql`CASE ${actionsTable.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'normal' THEN 2 ELSE 3 END`,
+      sql`${actionsTable.dueDate} ASC NULLS LAST`, asc(actionsTable.id))
+    .limit(1000);
+  const today = new Date();
+  const weekAhead = new Date(today.getTime() + 7 * 86_400_000).toISOString().slice(0, 10);
+  const counts = {
+    total: rows.length,
+    urgent: rows.filter((r) => r.priority === "urgent").length,
+    high: rows.filter((r) => r.priority === "high").length,
+    overdue: rows.filter((r) => r.isOverdue).length,
+    dueThisWeek: rows.filter((r) => r.dueDate && !r.isOverdue && String(r.dueDate).slice(0, 10) <= weekAhead).length,
+    unassigned: rows.filter((r) => !r.assignedToUserId).length,
+  };
+  res.json({ generatedAt: new Date().toISOString(), filters: q, counts, tasks: rows });
+});
+
 // Archived actions (managers): list + restore.
 router.get("/archived", requireAuth, requireRole("administrator", "manager"), async (req, res) => {
   const propertyId = req.authUser!.propertyId!;

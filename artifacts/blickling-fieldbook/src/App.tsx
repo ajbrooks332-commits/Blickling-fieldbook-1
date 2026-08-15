@@ -28,6 +28,7 @@ const Categories = lazy(() => import("@/pages/Categories"));
 const Locations = lazy(() => import("@/pages/Locations"));
 const Settings = lazy(() => import("@/pages/Settings"));
 const Archive = lazy(() => import("@/pages/Archive"));
+const MeetingPack = lazy(() => import("@/pages/MeetingPack"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
@@ -62,6 +63,7 @@ function AuthenticatedRoutes({ user }: { user: AuthUser }) {
       <Route path="/observations/:id" component={ObservationDetail} />
       <Route path="/observations" component={ObservationList} />
       <Route path="/actions/my" component={MyActions} />
+      <Route path="/actions/meeting-pack" component={MeetingPack} />
       <Route path="/actions/new">{() => <RolePage user={user} roles={managers}><ActionNew /></RolePage>}</Route>
       <Route path="/actions/:id/edit">{() => <RolePage user={user} roles={managers}><ActionEdit /></RolePage>}</Route>
       <Route path="/actions/:id" component={ActionDetail} />
